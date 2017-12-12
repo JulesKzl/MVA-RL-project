@@ -1,0 +1,16 @@
+\begin{thebibliography}{1}
+
+\bibitem{bartlett2009regal}
+Peter~L Bartlett and Ambuj Tewari.
+\newblock Regal: A regularization based algorithm for reinforcement learning in
+  weakly communicating mdps.
+\newblock In {\em Proceedings of the Twenty-Fifth Conference on Uncertainty in
+  Artificial Intelligence}, pages 35--42. AUAI Press, 2009.
+
+\bibitem{osband2013more}
+Ian Osband, Daniel Russo, and Benjamin Van~Roy.
+\newblock (more) efficient reinforcement learning via posterior sampling.
+\newblock In {\em Advances in Neural Information Processing Systems}, pages
+  3003--3011, 2013.
+
+\end{thebibliography}
