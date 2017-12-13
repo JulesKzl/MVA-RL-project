@@ -33,17 +33,19 @@ def run_experiment(agent, env, num_eps, seed=1,
     #empRegret = 0
 
     for ep in range(1, num_eps + 2):
-        # Reset the environment
-        state = env.reset()
-        agent.update_policy(ep)
+        # Compute policy π ̃k:
+        agent.update_policy()
 
+        # Execute policy π ̃k:
         ep_reward = 0
         ep_regret = 0
         absorb = False
 
+        state = env.reset()
         while (not absorb):
             # Step through the episode
             t = env.timestep
+
             action = agent.pick_action(state, t)
             new_state, reward, absorb = env.step(state, action)
 
@@ -56,7 +58,6 @@ def run_experiment(agent, env, num_eps, seed=1,
         cumReward += ep_reward
         cumRegret += ep_regret
         #empRegret += (epMaxVal - ep_reward)
-
 
         # Logging to dataframe
         # Variable granularity

@@ -26,97 +26,81 @@ class Agent:
 
     """
 
-    def __init__(self, n_states, n_actions, time_horizon,
-                 alpha0=1., mu0=0., tau0=1., tau=1., **kwargs):
+    def __init__(self, env, r_max):
         """
-        Tabular episodic learner for time-homoegenous MDP.
-        Must be used together with true state feature extractor.
+        Learner for MDP.
 
         Args:
-            n_states - int - number of states
-            n_actions - int - number of actions
-            alpha0 - prior weight for uniform Dirichlet
-            mu0 - prior mean rewards
-            tau0 - precision of prior mean rewards
-            tau - precision of reward noise
+            env: environment
 
         Returns:
-            tabular learner, to be inherited from
+            learner, to be inherited from
         """
-        # Instantiate the Bayes learner
-        self.n_states = n_states
-        self.n_actions = n_actions
-        self.time_horizon = time_horizon
-        self.alpha0 = alpha0
-        self.mu0 = mu0
-        self.tau0 = tau0
-        self.tau = tau
+        self.n_states = env.n_states
+        self.n_actions = env.n_actions
+        n_states = self.n_states
+        n_actions = self.n_actions
+        self.r_max = float(r_max)
 
-        self.qVals = {}
-        self.qMax = {}
+        self.iteration = 0
 
-        # Now make the prior beliefs
-        self.R_prior = {}
-        self.P_prior = {}
+        self.estimated_P_counter = np.zeros((nb_states, n_actions, nb_states), dtype=np.int64)
+        self.estimated_P = np.ones((nb_states, n_actions, nb_states)) / nb_states
+        self.visited_sa = set()
 
-        for state in xrange(n_states):
-            for action in xrange(n_actions):
-                self.R_prior[state, action] = (self.mu0, self.tau0)
-                self.P_prior[state, action] = (
-                    self.alpha0 * np.ones(self.n_states, dtype=np.float32))
+        self.estimated_rewards = np.ones((nb_states, n_actions)) * (self.r_max + 99)
+        self.estimated_holding_times = np.ones((nb_states, n_actions))
 
-    def update_obs(self, oldState, action, reward, newState, pContinue, h):
+        self.nb_observations = np.zeros((nb_states, n_actions), dtype=np.int64)
+        self.nu_k = np.zeros((nb_states, n_actions), dtype=np.int64)
+        self.tau = 0.9
+        self.tau_max = 1
+        self.tau_min = 1
+
+        # initialize policy
+        self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
+        self.policy_indices = np.zeros((n_states,), dtype=np.int_)
+
+
+    def update_obs(self, state, action, reward, new_state, absorb, t):
         """
         Update the posterior belief based on one transition.
 
         Args:
-            oldState - int
+            state - int
             action - int
             reward - double
-            newState - int
-            pContinue - 0/1
-            h - int - time within episode (not used)
+            new_state - int
+            absorb - 0/1
+            t - int - time within episode (not used)
 
         Returns:
             NULL - updates in place
         """
-        mu0, tau0 = self.R_prior[oldState, action]
+        mu0, tau0 = self.R_prior[state, action]
         tau1 = tau0 + self.tau
         mu1 = (mu0 * tau0 + reward * self.tau) / tau1
-        self.R_prior[oldState, action] = (mu1, tau1)
+        self.R_prior[state, action] = (mu1, tau1)
 
-        if pContinue == 1:
-            self.P_prior[oldState, action][newState] += 1
+        if (not absorb):
+            self.P_prior[state, action][new_state] += 1
 
-    def egreedy(self, state, timestep, epsilon=0):
+    def pick_action(self, state):
         """
-        Select action according to a greedy policy
-
-        Args:
-            state - int - current state
-            timestep - int - timestep *within* episode
-
-        Returns:
-            action - int
+        Use policy for action selection
         """
-        Q = self.qVals[state, timestep]
-        n_actions = Q.size
-        noise = np.random.rand()
-
-        if noise < epsilon:
-            action = np.random.choice(n_actions)
-        else:
-            action = np.random.choice(np.where(Q == Q.max())[0])
-
+        action = self.policy[state]
         return action
 
-    def pick_action(self, state, timestep):
-        """
-        Default is to use egreedy for action selection
-        """
-        action = self.egreedy(state, timestep)
-        return action
 
+#-----------------------------------------------------------------------------
+# PSRL
+#-----------------------------------------------------------------------------
+
+class PSRL(Agent):
+    """
+    Posterior Sampling for Reinforcement Learning
+    """
     def sample_mdp(self):
         """
         Returns a single sampled MDP from the posterior.
@@ -130,159 +114,13 @@ class Agent:
         """
         R_samp = {}
         P_samp = {}
-        for s in xrange(self.n_states):
-            for a in xrange(self.n_actions):
+        for s in range(self.n_states):
+            for a in range(self.n_actions):
                 mu, tau = self.R_prior[s, a]
                 R_samp[s, a] = mu + np.random.normal() * 1./np.sqrt(tau)
                 P_samp[s, a] = np.random.dirichlet(self.P_prior[s, a])
 
         return R_samp, P_samp
-
-    def map_mdp(self):
-        """
-        Returns the maximum a posteriori MDP from the posterior.
-
-        Args:
-            NULL
-
-        Returns:
-            R_hat - R_hat[s, a] is the MAP mean reward for (s,a)
-            P_hat - P_hat[s, a] is the MAP transition vector for (s,a)
-        """
-        R_hat = {}
-        P_hat = {}
-        for s in xrange(self.n_states):
-            for a in xrange(self.n_actions):
-                R_hat[s, a] = self.R_prior[s, a][0]
-                P_hat[s, a] = self.P_prior[s, a] / np.sum(self.P_prior[s, a])
-
-        return R_hat, P_hat
-
-    def compute_qVals(self, R, P):
-        """
-        Compute the Q values for a given R, P estimates
-
-        Args:
-            R - R[s,a] = mean rewards
-            P - P[s,a] = probability vector of transitions
-
-        Returns:
-            qVals - qVals[state, timestep] is vector of Q values for each action
-            qMax - qMax[timestep] is the vector of optimal values at timestep
-        """
-        qVals = {}
-        qMax = {}
-
-        qMax[self.time_horizon] = np.zeros(self.n_states, dtype=np.float32)
-
-        for i in range(self.time_horizon):
-            j = self.time_horizon - i - 1
-            qMax[j] = np.zeros(self.n_states, dtype=np.float32)
-
-            for s in range(self.n_states):
-                qVals[s, j] = np.zeros(self.n_actions, dtype=np.float32)
-
-                for a in range(self.n_actions):
-                    qVals[s, j][a] = R[s, a] + np.dot(P[s, a], qMax[j + 1])
-
-                qMax[j][s] = np.max(qVals[s, j])
-
-        return qVals, qMax
-
-    def compute_qVals_opt(self, R, P, R_bonus, P_bonus):
-        """
-        Compute the Q values for a given R, P estimates + R/P bonus
-
-        Args:
-            R - R[s,a] = mean rewards
-            P - P[s,a] = probability vector of transitions
-            R_bonus - R_bonus[s,a] = bonus for rewards
-            P_bonus - P_bonus[s,a] = bonus for transitions
-
-        Returns:
-            qVals - qVals[state, timestep] is vector of Q values for each action
-            qMax - qMax[timestep] is the vector of optimal values at timestep
-        """
-        qVals = {}
-        qMax = {}
-
-        qMax[self.time_horizon] = np.zeros(self.n_states, dtype=np.float32)
-
-        for i in range(self.time_horizon):
-            j = self.time_horizon - i - 1
-            qMax[j] = np.zeros(self.n_states, dtype=np.float32)
-
-            for s in range(self.n_states):
-                qVals[s, j] = np.zeros(self.n_actions, dtype=np.float32)
-
-                for a in range(self.n_actions):
-                    qVals[s, j][a] = (R[s, a] + R_bonus[s, a]
-                                      + np.dot(P[s, a], qMax[j + 1])
-                                      + P_bonus[s, a] * i)
-                qMax[j][s] = np.max(qVals[s, j])
-
-        return qVals, qMax
-
-    def compute_qVals_EVI(self, R, P, R_slack, P_slack):
-        """
-        Compute the Q values for a given R, P by extended value iteration
-
-        Args:
-            R - R[s,a] = mean rewards
-            P - P[s,a] = probability vector of transitions
-            R_slack - R_slack[s,a] = slack for rewards
-            P_slack - P_slack[s,a] = slack for transitions
-
-        Returns:
-            qVals - qVals[state, timestep] is vector of Q values for each action
-            qMax - qMax[timestep] is the vector of optimal values at timestep
-        """
-                # Extended value iteration
-        qVals = {}
-        qMax = {}
-        qMax[self.time_horizon] = np.zeros(self.n_states)
-
-        for i in range(self.time_horizon):
-            j = self.time_horizon - i - 1
-            qMax[j] = np.zeros(self.n_states)
-
-            for s in range(self.n_states):
-                qVals[s, j] = np.zeros(self.n_actions)
-
-                for a in range(self.n_actions):
-                    rOpt = R[s, a] + R_slack[s, a]
-
-                    # form pOpt by extended value iteration, pInd sorts the values
-                    pInd = np.argsort(qMax[j + 1])
-                    pOpt = P[s, a]
-                    if pOpt[pInd[self.n_states - 1]] + P_slack[s, a] * 0.5 > 1:
-                        pOpt = np.zeros(self.n_states)
-                        pOpt[pInd[self.n_states - 1]] = 1
-                    else:
-                        pOpt[pInd[self.n_states - 1]] += P_slack[s, a] * 0.5
-
-                    # Go through all the states and get back to make pOpt a real prob
-                    sLoop = 0
-                    while np.sum(pOpt) > 1:
-                        worst = pInd[sLoop]
-                        pOpt[worst] = max(0, 1 - np.sum(pOpt) + pOpt[worst])
-                        sLoop += 1
-
-                    # Do Bellman backups with the optimistic R and P
-                    qVals[s, j][a] = rOpt + np.dot(pOpt, qMax[j + 1])
-
-                qMax[j][s] = np.max(qVals[s, j])
-
-        return qVals, qMax
-
-#-----------------------------------------------------------------------------
-# PSRL
-#-----------------------------------------------------------------------------
-
-class PSRL(Agent):
-    """
-    Posterior Sampling for Reinforcement Learning
-    """
 
     def update_policy(self, h=False):
         """
@@ -290,6 +128,7 @@ class PSRL(Agent):
 
         Works in place with no arguments.
         """
+        self.iteration += 1
         # Sample the MDP
         R_samp, P_samp = self.sample_mdp()
 
@@ -301,128 +140,99 @@ class PSRL(Agent):
         self.qMax = qMax
 
 #-----------------------------------------------------------------------------
-# PSRL
-#-----------------------------------------------------------------------------
-
-class PSRLunif(PSRL):
-    """
-    Posterior Sampling for Reinforcement Learning with spread prior
-    """
-
-    def __init__(self, n_states, n_actions, time_horizon,
-                 alpha0=1., mu0=0., tau0=1., tau=1., **kwargs):
-        """
-        Just like PSRL but rescale alpha between successor states
-
-        Args:
-            nSamp - int - number of samples to use for optimism
-        """
-        newAlpha = alpha0 / n_states
-        super(PSRLunif, self).__init__(n_states, n_actions, time_horizon, alpha0=newAlpha,
-                                       mu0=mu0, tau0=tau0, tau=tau)
-
-#-----------------------------------------------------------------------------
-# Optimistic PSRL
-#-----------------------------------------------------------------------------
-
-class OptimisticPSRL(PSRL):
-    """
-    Optimistic Posterior Sampling for Reinforcement Learning
-    """
-    def __init__(self, n_states, n_actions, time_horizon,
-                 alpha0=1., mu0=0., tau0=1., tau=1., nSamp=10, **kwargs):
-        """
-        Just like PSRL but we take optimistic over multiple samples
-
-        Args:
-            nSamp - int - number of samples to use for optimism
-        """
-        super(OptimisticPSRL, self).__init__(n_states, n_actions, time_horizon,
-                                             alpha0, mu0, tau0, tau)
-        self.nSamp = nSamp
-
-    def update_policy(self):
-        """
-        Take multiple samples and then take the optimistic envelope.
-
-        Works in place with no arguments.
-        """
-        # Sample the MDP
-        R_samp, P_samp = self.sample_mdp()
-        qVals, qMax = self.compute_qVals(R_samp, P_samp)
-        self.qVals = qVals
-        self.qMax = qMax
-
-        for i in xrange(1, self.nSamp):
-            # Do another sample and take optimistic Q-values
-            R_samp, P_samp = self.sample_mdp()
-            qVals, qMax = self.compute_qVals(R_samp, P_samp)
-
-            for timestep in xrange(self.time_horizon):
-                self.qMax[timestep] = np.maximum(qMax[timestep],
-                                                 self.qMax[timestep])
-                for state in xrange(self.n_states):
-                    self.qVals[state, timestep] = np.maximum(qVals[state, timestep],
-                                                             self.qVals[state, timestep])
-
-#-----------------------------------------------------------------------------
 # UCRL2
 #-----------------------------------------------------------------------------
 
 class UCRL2(Agent):
     """Classic benchmark optimistic algorithm"""
 
-    def __init__(self, n_states, n_actions, time_horizon,
-                 delta=0.05, scaling=1., **kwargs):
+    def __init__(self, env, r_max):
         """
-        As per the tabular learner, but prior effect --> 0.
-
         Args:
-            delta - double - probability scale parameter
-            scaling - double - rescale default confidence sets
+            env
+            r_max
         """
-        super(UCRL2, self).__init__(n_states, n_actions, time_horizon,
-                                    alpha0=1e-5, tau0=0.0001)
-        self.delta = delta
-        self.scaling = scaling
+        super(UCRL2, self).__init__(env, r_max)
+        self.delta = 1.
 
 
-    def get_slack(self, time):
+    def max_proba(self, n_states, p, sorted_indices, beta):
         """
-        Returns the slackness parameters for UCRL2
-
-        Args:
-            time - int - grows the confidence sets
-
-        Returns:
-            R_slack - R_slack[s, a] is the confidence width for UCRL2 reward
-            P_slack - P_slack[s, a] is the confidence width for UCRL2 transition
+        :param p: probability distribution with toys support
+        :param sorted_indices: argsort of value function
+        :param beta: confidence bound on the empirical probability
+        :return: optimal probability
         """
-        R_slack = {}
-        P_slack = {}
-        delta = self.delta
-        scaling = self.scaling
-        for s in xrange(self.n_states):
-            for a in xrange(self.n_actions):
-                nObsR = max(self.R_prior[s, a][1] - self.tau0, 1.)
-                R_slack[s, a] = scaling * np.sqrt((4 * np.log(2 * self.n_states * self.n_actions * (time + 1) / delta)) / float(nObsR))
+        n = np.size(sorted_indices)
+        min1 = min(1, p[sorted_indices[n-1]] + beta/2)
+        if min1 == 1:
+            p2 = np.zeros(n_states)
+            p2[sorted_indices[n-1]] = 1
+        else:
+            sorted_p = p[sorted_indices]
+            support_sorted_p = np.nonzero(sorted_p)[0]
+            restricted_sorted_p = sorted_p[support_sorted_p]
+            support_p = sorted_indices[support_sorted_p]
+            p2 = np.zeros(n_states)
+            p2[support_p] = restricted_sorted_p
+            p2[sorted_indices[n-1]] = min1
+            s = 1 - p[sorted_indices[n-1]] + min1
+            s2 = s
+            for i, proba in enumerate(restricted_sorted_p):
+                max1 = max(0, 1 - s + proba)
+                s2 += (max1 - proba)
+                p2[support_p[i]] = max1
+                s = s2
+                if s <= 1: break
+        return p2
 
-                nObsP = max(self.P_prior[s, a].sum() - self.alpha0, 1.)
-                P_slack[s, a] = scaling * np.sqrt((4 * self.n_states * np.log(2 * self.n_states * self.n_actions * (time + 1) / delta)) / float(nObsP))
-        return R_slack, P_slack
-
-    def update_policy(self, time=100):
+    def extended_value_iteration(self, beta_r, beta_p, beta_tau, epsilon):
         """
-        Compute UCRL2 Q-values via extended value iteration.
+        :param beta_r: confidence bounds on rewards
+        :param beta_p: confidence bounds on transition probabilities
+        :param beta_tau: confidence bounds on holding times
+        :param epsilon: desired accuracy
         """
-        # Output the MAP estimate MDP
-        R_hat, P_hat = self.map_mdp()
+        u1 = np.zeros(self.n_states)
+        sorted_indices = np.arange(self.n_states)
+        u2 = np.zeros(self.n_states)
+        P = self.estimated_P
+        counter = 0
+        while True:
+            counter += 1
+            for s in range(0, self.n_states):
+                first_action = True
+                for c, a in enumerate(range(self.n_actions)):
+                    vec = self.max_proba(P[s][c], sorted_indices, beta_p[s][c])
+                    vec[s] -= 1
+                    r_optimal = min(self.tau_max*self.r_max,
+                                    self.estimated_rewards[s][c] + beta_r[s][c])
+                    v = r_optimal + np.dot(vec, u1) * self.tau
+                    tau_optimal = min(self.tau_max, max(max(self.tau_min, r_optimal/self.r_max),
+                                  self.estimated_holding_times[s][c] - np.sign(v) * beta_tau[s][c]))
+                    if first_action or v/tau_optimal + u1[s] > u2[s] or m.isclose(v/tau_optimal + u1[s], u2[s]):  # optimal policy = argmax
+                        u2[s] = v/tau_optimal + u1[s]
+                        self.policy_indices[s] = c
+                        self.policy[s] = a
+                    first_action = False
+            if max(u2-u1)-min(u2-u1) < epsilon:  # stopping condition of EVI
+                print("---{}".format(counter))
+                return max(u1) - min(u1), u1, u2
+            else:
+                u1 = u2
+                u2 = np.empty(self.n_states)
+                sorted_indices = np.argsort(u1)
 
-        # Compute the slack parameters
-        R_slack, P_slack = self.get_slack(time)
+    def update_policy(self):
+        """
+        Compute UCRL2 via extended value iteration.
+        """
+        self.iteration += 1
+        self.delta = 1 / np.sqrt(self.iteration + 1)
 
-        # Perform extended value iteration
-        qVals, qMax = self.compute_qVals_EVI(R_hat, P_hat, R_slack, P_slack)
+        beta_r = self.beta_r()  # confidence bounds on rewards
+        beta_tau = self.beta_tau()  # confidence bounds on holding times
+        beta_p = self.beta_p()  # confidence bounds on transition probabilities
+        epsilon = self.delta # desired accuracy
 
-        self.qVals = qVals
-        self.qMax = qMax
+        span_value = self.extended_value_iteration(beta_r, beta_p, beta_tau, epsilon)
