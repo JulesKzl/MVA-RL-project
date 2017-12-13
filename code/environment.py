@@ -13,8 +13,19 @@ import copy #Gridwold
 class Environment(object):
     """General RL environment"""
 
-    def __init__(self):
-        pass
+    def __init__(self, n_states, n_actions):
+        """
+        Initialize Env
+
+        Args:
+            n_states  - int - number of states
+            n_actions - int - number of actions
+
+        Returns:
+            Environment object
+        """
+        self.n_states = n_states
+        self.n_actions = n_actions
 
     def reset(self):
         """
@@ -37,7 +48,8 @@ class Environment(object):
             reward (float): a scalar value representing the immediate reward
             absorb (boolean): True if the next_state is absorsing, False otherwise
         """
-        return 0, 0, False
+        pass
+
 
 
 #-------------------------------------------------------------------------------
@@ -62,8 +74,7 @@ class MDP(Environment):
         Returns:
             Environment object
         """
-        self.n_states = n_states
-        self.n_actions = n_actions
+        super(MDP, self).__init__(n_states, n_actions)
 
         self.timestep = 0
 
@@ -112,6 +123,25 @@ class MDP(Environment):
         absorb = False
 
         return next_state, reward, absorb
+
+
+    def compute_LTAR(self, policy, T_max):
+        """ Compute long-term average reward """
+        # N = np.zeros((self.n_states, self.n_actions))
+        t = 0
+        cumul_reward = 0
+        state = self.reset()
+        action = policy[state]
+        while (t < T_max): #or terminal
+            t += 1
+            nexts, reward, term = self.step(state, action)
+            cumul_reward += reward
+            state = nexts
+            action = policy[state]
+            if (term):
+                print('Not implemented for finite horizon MDP')
+                break
+        return cumul_reward/T_max
 
 
 #-------------------------------------------------------------------------------
@@ -177,6 +207,7 @@ class GridWorld(Environment):
         self.gamma = gamma
         self.proba_succ = 0.9
         self.render = render
+        super(GridWorld, self).__init__(n_states, 4)
 
     def reset(self):
         """

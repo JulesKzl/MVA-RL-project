@@ -18,25 +18,33 @@ def make_MDP_TP1():
 
     P_true[0,0][0] = 0.45
     P_true[0,0][2] = 0.55
-    R_true[0,0] = (-0.4, 0)
+    # R_true[0,0] = (-0.4, 0)
+    R_true[0,0] = (1.6, 0)
     P_true[0,1][2] = 1
-    R_true[0,1] = (0, 0)
+    # R_true[0,1] = (0, 0)
+    R_true[0,1] = (2, 0)
     P_true[1,0][2] = 1
-    R_true[1,0] = (2, 0)
+    # R_true[1,0] = (2, 0)
+    R_true[1,0] = (4, 0)
     P_true[1,1][0] = 0.5
     P_true[1,1][1] = 0.4
     P_true[1,1][2] = 0.1
-    R_true[1,1] = (0, 0)
+    # R_true[1,1] = (0, 0)
+    R_true[1,1] = (2, 0)
     P_true[2,0][0] = 0.6
     P_true[2,0][2] = 0.4
-    R_true[2,0] = (-1, 0)
+    # R_true[2,0] = (-1, 0)
+    R_true[2,0] = (1, 0)
     P_true[2,1][1] = 0.9
     P_true[2,1][2] = 0.1
-    R_true[2,1] = (-0.5, 0)
+    # R_true[2,1] = (-0.5, 0)
+    R_true[2,1] = (1.5, 0)
 
     MDP_TP1 = MDP(n_states, n_actions)
     MDP_TP1.R = R_true
     MDP_TP1.P = P_true
+
+    MDP_TP1.pi_star = [1, 0, 1]
 
     return MDP_TP1
 

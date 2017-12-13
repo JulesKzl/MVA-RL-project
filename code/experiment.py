@@ -9,6 +9,7 @@ import pandas as pd
 
 from shutil import copyfile
 
+
 def run_experiment(agent, env, num_eps, seed=1,
                     fileFreq=1000, targetPath='tmp.csv'):
     '''
@@ -27,41 +28,49 @@ def run_experiment(agent, env, num_eps, seed=1,
     '''
     data = []
     np.random.seed(seed)
+    max_duration = 50
 
-    cumRegret = 0
-    cumReward = 0
-    #empRegret = 0
+    cum_reward = []
+    regret = []
 
     for ep in range(1, num_eps + 2):
+        print("ep:", ep)
         # Compute policy π ̃k:
         agent.update_policy()
 
         # Execute policy π ̃k:
-        ep_reward = 0
+        ep_cum_reward = 0
         ep_regret = 0
-        absorb = False
 
+        agent.visited_sa.clear()
         state = env.reset()
-        while (not absorb):
-            # Step through the episode
-            t = env.timestep
+        t = 0
+        while (agent.nu_k[state][agent.policy_indices[state]] \
+                < max(1, agent.nb_observations[state][agent.policy_indices[state]])\
+                and t < max_duration):
+            # Select action
+            action = agent.pick_action(state)
 
-            action = agent.pick_action(state, t)
+            # Step through the episode
             new_state, reward, absorb = env.step(state, action)
 
-            ep_reward += reward
-            ep_regret -= reward
+            # Store total reward and regret
+            t = env.timestep
+            ep_cum_reward += reward
+            curr_regret = t* agent.rho_star - ep_cum_reward
+            #ep_regret.append(curr_regret)
 
-            agent.update_obs(state, action, reward, new_state, absorb, t)
+            # Update estimations at each step
+            agent.update_estimations(state, new_state, reward, absorb, t)
             state = new_state
+        # Update estimated probabilities
+        agent.update_obs()
 
-        cumReward += ep_reward
-        cumRegret += ep_regret
-        #empRegret += (epMaxVal - ep_reward)
+        cum_reward.append(ep_cum_reward)
+        print(curr_regret)
+        #regret.append(ep_regret)
 
         # Logging to dataframe
-        # Variable granularity
-        # recFreq - how many episodes between logging
         if ep < 1e4:
             recFreq = 100
         elif ep < 1e5:
@@ -82,6 +91,4 @@ def run_experiment(agent, env, num_eps, seed=1,
         #     copyfile('tmp.csv', targetPath)
         #     print '****************************'
 
-    print '**************************************************'
-    print 'Experiment complete'
-    print '**************************************************'
+    print('Experiment complete')
