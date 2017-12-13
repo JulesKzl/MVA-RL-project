@@ -17,3 +17,8 @@ What's new
 ----------
 - 2017-11-16: Initial release (v0.15.dev0)
     Contains UCRL, SMDP-UCRL, Free-Parameter SMDP-UCRL
+
+Requirements
+===========
+
+- Cython (pip3 install cython)
