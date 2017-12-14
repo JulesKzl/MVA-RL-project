@@ -143,6 +143,10 @@ class MDP(Environment):
                 break
         return cumul_reward/T_max
 
+    def compute_regret(self, policy, T_max):
+        E_star = self.compute_LTAR(self.pi_star, T_max)
+        E = self.compute_LTAR(policy, T_max)
+        return T_max*(E_star - E)
 
 #-------------------------------------------------------------------------------
 

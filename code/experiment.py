@@ -1,94 +1,47 @@
-'''
+"""
 Script to run simple RL experiments.
-
-author: iosband@stanford.edu
-'''
+"""
 
 import numpy as np
-import pandas as pd
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 
-from shutil import copyfile
-
-
-def run_experiment(agent, env, num_eps, seed=1,
-                    fileFreq=1000, targetPath='tmp.csv'):
-    '''
-    A simple script to run a finite tabular MDP experiment
+def run_experiment(agent, env, nb_simu, N_samples, seed=1):
+    """
+    A simple script to run an experiment
 
     Args:
-        agent - finite tabular agent
-        env - finite TabularMDP
-        num_eps - number of episodes to run
-        seed - numpy random seed
-        fileFreq - how many episodes between writing file
-        targetPath - where to write the csv
-
-    Returns:
-        NULL - data is output to targetPath as csv file
-    '''
-    data = []
+        agent - agent
+        env - MDP
+        nb_simu - number of simulation
+        N_samples - number of samples to compute regret
+        seed - 1 - for reproductibility
+    """
     np.random.seed(seed)
+    T_max = 100000
     max_duration = 50
 
-    cum_reward = []
-    regret = []
-
-    for ep in range(1, num_eps + 2):
-        print("ep:", ep)
+    E_eps_mean = []
+    for k in tqdm(range(nb_simu), desc="Simulating {}".format(agent.name)):
         # Compute policy π ̃k:
         agent.update_policy()
 
-        # Execute policy π ̃k:
-        ep_cum_reward = 0
-        ep_regret = 0
+        # Execute policy π ̃k on environnement during a max of max_duration:
+        agent.execute_policy(env, max_duration)
 
-        state = env.reset()
-        action = agent.pick_action(state)
-        t = 0
-        while (agent.nu_k[state][action] < max(1, agent.nb_observations[state][action])\
-                and t < max_duration):
-            # Step through the episode
-            new_state, reward, absorb = env.step(state, action)
+        # Computing regret at eatch step for plotting
+        E_list = []
+        for i in range(N_samples):
+            E = env.compute_LTAR(agent.policy, T_max/N_samples)
+            E_list.append(E)
+        E_mean = np.array(E_list).mean()
+        E_var = np.array(E_list).var()
+        print(E_mean)
+        E_eps_mean.append(E_mean)
 
-            # Store total reward and regret
-            t = env.timestep
-            ep_cum_reward += reward
-            curr_regret = t* agent.rho_star - ep_cum_reward
-            #ep_regret.append(curr_regret)
-
-            # Update estimations at each step
-            agent.update_estimations(state, new_state, reward, absorb, t)
-            state = new_state
-
-            # Select next action
-            action = agent.pick_action(state)
-
-        # Update nb of observations
-        agent.nb_observations += agent.nu_k
-
-        cum_reward.append(ep_cum_reward)
-        print(curr_regret)
-        #regret.append(ep_regret)
-
-        # Logging to dataframe
-        if ep < 1e4:
-            recFreq = 100
-        elif ep < 1e5:
-            recFreq = 1000
-        else:
-            recFreq = 10000
-
-        # if ep % recFreq == 0:
-        #     data.append([ep, ep_reward, cumReward, cumRegret, empRegret])
-        #     print 'episode:', ep, 'ep_reward:', ep_reward, 'cumRegret:', cumRegret
-        #
-        # if ep % max(fileFreq, recFreq) == 0:
-        #     dt = pd.DataFrame(data,
-        #                       columns=['episode', 'ep_reward', 'cumReward',
-        #                                'cumRegret', 'empRegret'])
-        #     print 'Writing to file ' + targetPath
-        #     dt.to_csv('tmp.csv', index=False, float_format='%.2f')
-        #     copyfile('tmp.csv', targetPath)
-        #     print '****************************'
-
-    print('Experiment complete')
+    x = np.arange(1, nb_simu+1)
+    plt.plot(x, E_eps_mean, label = agent.name)
+    plt.xlabel('Rounds')
+    plt.ylabel('Regret')
+    plt.legend()
+    plt.show()

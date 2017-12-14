@@ -7,6 +7,7 @@ We provide implementations of:
 - UCRL2
 
 author: iosband@stanford.edu
+author: Ronan Fruit
 Edit : Jules Kozolinsky
 """
 
@@ -28,25 +29,19 @@ class Agent:
 
     Child agents will mainly implement:
         update_policy
-
-    Important internal representation is given by qVals and qMax.
-        qVals - qVals[state, timestep] is vector of Q values for each action
-        qMax - qMax[timestep] is the vector of optimal values at timestep
-
     """
 
     def __init__(self, env, r_max):
         """
-        Learner for MDP.
-
         Args:
             env: environment
-            alpha0 - prior weight for uniform Dirichlet
-            mu0 - prior mean rewards
-            tau0 - precision of prior mean rewards
+            r_max - maximum reward
+            # alpha0 - prior weight for uniform Dirichlet
+            # mu0 - prior mean rewards
+            # tau0 - precision of prior mean rewards
 
         Returns:
-            learner, to be inherited from
+            Learner
         """
         self.n_states = env.n_states
         self.n_actions = env.n_actions
@@ -75,7 +70,6 @@ class Agent:
 
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
-
         self.rho_star = env.compute_LTAR(env.pi_star, 100000)
 
     def pick_action(self, state):
@@ -109,6 +103,26 @@ class Agent:
         self.nu_k[s][a] += 1
         self.iteration += 1
 
+    def execute_policy(self, env, max_duration):
+        state = env.reset()
+        action = self.pick_action(state)
+        t = 0
+        while (self.nu_k[state][action] < max(1, self.nb_observations[state][action])\
+                and t < max_duration):
+            # Step through the episode
+            new_state, reward, absorb = env.step(state, action)
+
+            # Update estimations at each step
+            t = env.timestep
+            self.update_estimations(state, new_state, reward, absorb, t)
+            state = new_state
+
+            # Select next action
+            action = self.pick_action(state)
+
+        # Update nb of observations
+        self.nb_observations += self.nu_k
+
 
 #-----------------------------------------------------------------------------
 # PSRL
@@ -118,6 +132,10 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
+    def __init__(self, env, r_max):
+        super(PSRL, self).__init__(env, r_max)
+        self.name = "PSRL"
+
     def value_iteration(self, P_samp, R_samp, epsilon):
         """
         :param P_samp: sampled probability
@@ -134,7 +152,6 @@ class PSRL(Agent):
                 first_action = True
                 for a in range(self.n_actions):
                     vec = P_samp[s, a]
-                    # vec[s] -= 1
                     r_optimal = R_samp[s, a]
                     v = r_optimal + np.dot(vec, u1)
                     if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
@@ -191,14 +208,9 @@ class PSRL(Agent):
 class UCRL2(Agent):
     """Classic benchmark optimistic algorithm"""
 
-    # def __init__(self, env, r_max):
-    #     """
-    #     Args:
-    #         env
-    #         r_max
-    #     """
-    #     super(UCRL2, self).__init__(env, r_max)
-    #
+    def __init__(self, env, r_max):
+        super(UCRL2, self).__init__(env, r_max)
+        self.name = "UCRL2"
 
     def chernoff(self, it, N, delta, sqrt_C, log_C, range=1.):
         ci = range * np.sqrt(sqrt_C * m.log(log_C * (it + 1) / delta) / np.maximum(1,N))
