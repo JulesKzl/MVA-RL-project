@@ -42,15 +42,11 @@ def run_experiment(agent, env, num_eps, seed=1,
         ep_cum_reward = 0
         ep_regret = 0
 
-        agent.visited_sa.clear()
         state = env.reset()
+        action = agent.pick_action(state)
         t = 0
-        while (agent.nu_k[state][agent.policy_indices[state]] \
-                < max(1, agent.nb_observations[state][agent.policy_indices[state]])\
+        while (agent.nu_k[state][action] < max(1, agent.nb_observations[state][action])\
                 and t < max_duration):
-            # Select action
-            action = agent.pick_action(state)
-
             # Step through the episode
             new_state, reward, absorb = env.step(state, action)
 
@@ -63,8 +59,12 @@ def run_experiment(agent, env, num_eps, seed=1,
             # Update estimations at each step
             agent.update_estimations(state, new_state, reward, absorb, t)
             state = new_state
-        # Update estimated probabilities
-        agent.update_obs()
+
+            # Select next action
+            action = agent.pick_action(state)
+
+        # Update nb of observations
+        agent.nb_observations += agent.nu_k
 
         cum_reward.append(ep_cum_reward)
         print(curr_regret)

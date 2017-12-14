@@ -1,20 +1,26 @@
 """
 This is a collection of some of the classic benchmark algorithms for efficient
-reinforcement learning in a tabular MDP with little/no prior knowledge.
+reinforcement learning
 We provide implementations of:
 
 - PSRL
-- Gaussian PSRL
-- UCBVI
 - UCRL2
 
 author: iosband@stanford.edu
+Edit : Jules Kozolinsky
 """
 
 import numpy as np
 import math as m
 import time
 
+def argmax(seq, fn):
+    best = seq[0]; best_score = fn(best)
+    for x in seq:
+        x_score = fn(x)
+        if x_score > best_score:
+            best, best_score = x, x_score
+    return best
 
 class Agent:
     """
@@ -35,6 +41,9 @@ class Agent:
 
         Args:
             env: environment
+            alpha0 - prior weight for uniform Dirichlet
+            mu0 - prior mean rewards
+            tau0 - precision of prior mean rewards
 
         Returns:
             learner, to be inherited from
@@ -46,47 +55,28 @@ class Agent:
         self.r_max = float(r_max)
 
         self.iteration = 0
+        self.delta = 1
 
-        self.estimated_P_counter = np.zeros((n_states, n_actions, n_states), dtype=np.int64)
-        self.estimated_P = np.ones((n_states, n_actions, n_states)) / n_states
-        self.visited_sa = set()
+        self.mu0 = self.r_max + 99.
+        self.tau0 = 1.
+        self.alpha0 = 1.
 
-        self.estimated_rewards = np.ones((n_states, n_actions)) * (self.r_max + 99)
-        self.estimated_holding_times = np.ones((n_states, n_actions))
+        # Now make the prior beliefs
+        self.R_prior = {}
+        self.P_prior = {}
+        for state in range(n_states):
+            for action in range(n_actions):
+                self.R_prior[state, action] = (self.mu0, self.tau0)
+                self.P_prior[state, action] = (
+                    self.alpha0 * np.ones(self.n_states, dtype=np.float32))
 
         self.nb_observations = np.zeros((n_states, n_actions), dtype=np.int64)
         self.nu_k = np.zeros((n_states, n_actions), dtype=np.int64)
-        self.tau = 0.9
-        self.tau_max = 1
-        self.tau_min = 1
 
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
-        self.policy_indices = np.zeros((n_states,), dtype=np.int_)
 
-
-    def update_obs(self, state, action, reward, new_state, absorb, t):
-        """
-        Update the posterior belief based on one transition.
-
-        Args:
-            state - int
-            action - int
-            reward - double
-            new_state - int
-            absorb - 0/1
-            t - int - time within episode (not used)
-
-        Returns:
-            NULL - updates in place
-        """
-        mu0, tau0 = self.R_prior[state, action]
-        tau1 = tau0 + self.tau
-        mu1 = (mu0 * tau0 + reward * self.tau) / tau1
-        self.R_prior[state, action] = (mu1, tau1)
-
-        if (not absorb):
-            self.P_prior[state, action][new_state] += 1
+        self.rho_star = env.compute_LTAR(env.pi_star, 100000)
 
     def pick_action(self, state):
         """
@@ -94,6 +84,30 @@ class Agent:
         """
         action = self.policy[state]
         return action
+
+    def update_estimations(self, s, s2, r, absorb, t):
+        """
+        :param s: current state
+        :param s2: new state
+        :param r: reward
+        :param t: timestep
+        """
+        a = self.policy[s]
+
+        scale_f = self.nb_observations[s][a] + self.nu_k[s][a]
+        mu0, tau0 = self.R_prior[s, a]
+        tau = tau0 / max(1, scale_f) #TODO Why?
+
+        # mu1 = (mu0 * tau0 + r * tau) / (tau0 + tau)
+        mu1 = (mu0*scale_f +r) / (scale_f + 1.)
+        tau1 = tau0 + tau
+        self.R_prior[s, a] = mu1, tau1
+
+        if (not absorb):
+            self.P_prior[s, a][s2] += 1
+
+        self.nu_k[s][a] += 1
+        self.iteration += 1
 
 
 #-----------------------------------------------------------------------------
@@ -104,6 +118,37 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
+    def value_iteration(self, P_samp, R_samp, epsilon):
+        """
+        :param P_samp: sampled probability
+        :param R_samp: sampled rewads
+        :param epsilon: desired accuracy
+        """
+        u1 = np.zeros(self.n_states)
+        sorted_indices = np.arange(self.n_states)
+        u2 = np.zeros(self.n_states)
+        counter = 0
+        while True:
+            counter += 1
+            for s in range(0, self.n_states):
+                first_action = True
+                for a in range(self.n_actions):
+                    vec = P_samp[s, a]
+                    # vec[s] -= 1
+                    r_optimal = R_samp[s, a]
+                    v = r_optimal + np.dot(vec, u1)
+                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
+                        u2[s] = v + u1[s]
+                        self.policy[s] = a
+                    first_action = False
+            if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
+                return max(u1) - min(u1), u1, u2
+            else:
+                u1 = u2
+                u2 = np.empty(self.n_states)
+                sorted_indices = np.argsort(u1)
+
+
     def sample_mdp(self):
         """
         Returns a single sampled MDP from the posterior.
@@ -123,23 +168,21 @@ class PSRL(Agent):
                 R_samp[s, a] = mu + np.random.normal() * 1./np.sqrt(tau)
                 P_samp[s, a] = np.random.dirichlet(self.P_prior[s, a])
 
-        return R_samp, P_samp
+        return P_samp, R_samp
 
-    def update_policy(self, h=False):
+    def update_policy(self):
         """
-        Sample a single MDP from the posterior and solve for optimal Q values.
-
-        Works in place with no arguments.
+        Compute PSRL via value iteration.
         """
-        # Sample the MDP
-        R_samp, P_samp = self.sample_mdp()
+        self.delta = 1 / np.sqrt(self.iteration + 1)
+        # Approximate MDP
+        P_samp, R_samp = self.sample_mdp()
 
-        # Solve the MDP via value iteration
-        qVals, qMax = self.compute_qVals(R_samp, P_samp)
-
-        # Update the Agent's Q-values
-        self.qVals = qVals
-        self.qMax = qMax
+        # Compute optimistic policy
+        epsilon = self.delta # desired accuracy
+        t0 = time.time()
+        span_value = self.value_iteration(P_samp, R_samp, epsilon)
+        t1 = time.time()
 
 #-----------------------------------------------------------------------------
 # UCRL2
@@ -148,43 +191,14 @@ class PSRL(Agent):
 class UCRL2(Agent):
     """Classic benchmark optimistic algorithm"""
 
-    def __init__(self, env, r_max):
-        """
-        Args:
-            env
-            r_max
-        """
-        super(UCRL2, self).__init__(env, r_max)
-        self.delta = 1.
-        self.rho_star = env.compute_LTAR(env.pi_star, 100000)
-
-    def update_estimations(self, s, s2, r, absorb, t):
-        """
-        :param s: current state
-        :param s2: new state
-        :param r: reward
-        :param t: timestep
-        """
-        curr_act_idx = self.policy_indices[s]
-        scale_f = self.nb_observations[s][curr_act_idx] + self.nu_k[s][curr_act_idx]
-
-        self.estimated_rewards[s, curr_act_idx] *= scale_f / (scale_f + 1.)
-        self.estimated_rewards[s, curr_act_idx] += r / (scale_f + 1.)
-        self.estimated_holding_times[s, curr_act_idx] *= scale_f / (scale_f + 1.)
-        self.estimated_holding_times[s, curr_act_idx] += t / (scale_f + 1)
-
-        if (not absorb):
-            self.estimated_P_counter[s, curr_act_idx, s2] += 1
-        self.visited_sa.add((s,curr_act_idx))
-
-        self.nu_k[s][curr_act_idx] += 1
-        self.iteration += 1
-
-    def update_obs(self):
-        self.nb_observations += self.nu_k
-
-        for (s,a) in self.visited_sa:
-            self.estimated_P[s,a]  = self.estimated_P_counter[s,a] / self.nb_observations[s,a]
+    # def __init__(self, env, r_max):
+    #     """
+    #     Args:
+    #         env
+    #         r_max
+    #     """
+    #     super(UCRL2, self).__init__(env, r_max)
+    #
 
     def chernoff(self, it, N, delta, sqrt_C, log_C, range=1.):
         ci = range * np.sqrt(sqrt_C * m.log(log_C * (it + 1) / delta) / np.maximum(1,N))
@@ -218,28 +232,27 @@ class UCRL2(Agent):
                                sqrt_C=14*S, log_C=2*A)
         return beta.reshape([S, A, 1])
 
-
-    def max_proba(self, p, sorted_indices, beta):
+    def max_proba(self, P_hat, P_slack, sorted_indices):
         """
-        :param p: probability distribution with toys support
+        :param P_hat: probability distribution with toys support
+        :param P_slack: confidence bound on the empirical probability
         :param sorted_indices: argsort of value function
-        :param beta: confidence bound on the empirical probability
         :return: optimal probability
         """
         n = np.size(sorted_indices)
-        min1 = min(1, p[sorted_indices[n-1]] + beta/2)
+        min1 = min(1, P_hat[sorted_indices[n-1]] + P_slack/2)
         if min1 == 1:
             p2 = np.zeros(self.n_states)
             p2[sorted_indices[n-1]] = 1
         else:
-            sorted_p = p[sorted_indices]
+            sorted_p = P_hat[sorted_indices]
             support_sorted_p = np.nonzero(sorted_p)[0]
             restricted_sorted_p = sorted_p[support_sorted_p]
             support_p = sorted_indices[support_sorted_p]
             p2 = np.zeros(self.n_states)
             p2[support_p] = restricted_sorted_p
             p2[sorted_indices[n-1]] = min1
-            s = 1 - p[sorted_indices[n-1]] + min1
+            s = 1 - P_hat[sorted_indices[n-1]] + min1
             s2 = s
             for i, proba in enumerate(restricted_sorted_p):
                 max1 = max(0, 1 - s + proba)
@@ -249,52 +262,58 @@ class UCRL2(Agent):
                 if s <= 1: break
         return p2
 
-    def extended_value_iteration(self, beta_r, beta_p, epsilon):
+    def extended_value_iteration(self, P_hat, R_hat, P_slack, R_slack, epsilon):
         """
-        :param beta_r: confidence bounds on rewards
-        :param beta_p: confidence bounds on transition probabilities
+        :param P_hat: estimated probability
+        :param R_hat: estimated rewads
+        :param P_slack: confidence bounds on rewards
+        :param R_slack: confidence bounds on transition probabilities
         :param epsilon: desired accuracy
         """
         u1 = np.zeros(self.n_states)
         sorted_indices = np.arange(self.n_states)
         u2 = np.zeros(self.n_states)
-        P = self.estimated_P
         counter = 0
         while True:
             counter += 1
             for s in range(0, self.n_states):
                 first_action = True
-                for c, a in enumerate(range(self.n_actions)):
-                    vec = self.max_proba(P[s][c], sorted_indices, beta_p[s][c])
+                for a in range(self.n_actions):
+                    vec = self.max_proba(P_hat[s, a], P_slack[s][a], sorted_indices)
                     vec[s] -= 1
-                    r_optimal = min(self.tau_max*self.r_max,
-                                    self.estimated_rewards[s][c] + beta_r[s][c])
-                    v = r_optimal + np.dot(vec, u1) * self.tau
-                    tau_optimal = min(self.tau_max, max(max(self.tau_min, r_optimal/self.r_max),
-                                  self.estimated_holding_times[s][c]))
-                    if first_action or v/tau_optimal + u1[s] > u2[s] or m.isclose(v/tau_optimal + u1[s], u2[s]):  # optimal policy = argmax
-                        u2[s] = v/tau_optimal + u1[s]
-                        self.policy_indices[s] = c
+                    r_optimal = R_hat[s, a] + R_slack[s][a]
+                    v = r_optimal + np.dot(vec, u1)
+                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
+                        u2[s] = v + u1[s]
                         self.policy[s] = a
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
-                # print("-{}".format(counter))
                 return max(u1) - min(u1), u1, u2
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
                 sorted_indices = np.argsort(u1)
 
+    def estimated_mdp(self):
+        R_hat = {}
+        P_hat = {}
+        for s in range(self.n_states):
+            for a in range(self.n_actions):
+                R_hat[s, a] = self.R_prior[s, a][0]
+                P_hat[s, a] = self.P_prior[s, a] / np.sum(self.P_prior[s, a])
+        return P_hat, R_hat
+
     def update_policy(self):
         """
         Compute UCRL2 via extended value iteration.
         """
         self.delta = 1 / np.sqrt(self.iteration + 1)
+        # Approximate MDP
+        P_hat, R_hat = self.estimated_mdp()
+        P_slack, R_slack = self.beta_p(), self.beta_r()
 
-        beta_r = self.beta_r()  # confidence bounds on rewards
-        beta_p = self.beta_p()  # confidence bounds on transition probabilities
+        # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-
         t0 = time.time()
-        span_value = self.extended_value_iteration(beta_r, beta_p, epsilon)
+        span_value = self.extended_value_iteration(P_hat, R_hat, P_slack, R_slack, epsilon)
         t1 = time.time()

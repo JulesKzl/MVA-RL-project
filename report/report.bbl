@@ -13,4 +13,10 @@ Ian Osband, Daniel Russo, and Benjamin Van~Roy.
 \newblock In {\em Advances in Neural Information Processing Systems}, pages
   3003--3011, 2013.
 
+\bibitem{puterman2014markov}
+Martin~L Puterman.
+\newblock {\em Markov decision processes: discrete stochastic dynamic
+  programming}.
+\newblock John Wiley \& Sons, 2014.
+
 \end{thebibliography}
