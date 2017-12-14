@@ -16,3 +16,8 @@ Description:  The Exploration-Exploitation trade-off is a fundamental dilemma in
 [1] Osband Ian, Van Roy Benjamin, and Russo Daniel. (More) efficient reinforcement learning via posterior sampling. In Proceedings of the 26th International Conference on Neural Information Processing Systems - Volume 2 (NIPS'13), Vol. 2. Curran Associates Inc., USA, 3003-3011, 2013.
 
 [2] Peter L. Bartlett and Ambuj Tewari. REGAL: a regularization based algorithm for reinforcement learning in weakly communicating MDPs. In Proceedings of the Twenty-Fifth Conference on Uncertainty in Artificial Intelligence (UAI '09). AUAI Press, Arlington, Virginia, United States, 35-42, 2009.
+
+## Usage
+Require `tqdm` for displaying progression.
+
+Run : `python3 run_exp.py`

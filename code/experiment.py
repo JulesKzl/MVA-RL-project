@@ -1,6 +1,4 @@
-"""
-Script to run simple RL experiments.
-"""
+""" Implementation of an xperiment """
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -19,13 +17,13 @@ def run_experiment(agent, env, nb_simu, N_samples, seed=1):
     """
     np.random.seed(seed)
     T_max = 100000
-    max_duration = 50
+    max_duration = 5000#50
 
     E_eps_mean = []
     for k in tqdm(range(nb_simu), desc="Simulating {}".format(agent.name)):
         # Compute policy π ̃k:
         agent.update_policy()
-
+        print(agent.policy)
         # Execute policy π ̃k on environnement during a max of max_duration:
         agent.execute_policy(env, max_duration)
 
@@ -36,12 +34,11 @@ def run_experiment(agent, env, nb_simu, N_samples, seed=1):
             E_list.append(E)
         E_mean = np.array(E_list).mean()
         E_var = np.array(E_list).var()
-        print(E_mean)
         E_eps_mean.append(E_mean)
 
     x = np.arange(1, nb_simu+1)
     plt.plot(x, E_eps_mean, label = agent.name)
     plt.xlabel('Rounds')
-    plt.ylabel('Regret')
+    plt.ylabel('Average Long-term reward')
     plt.legend()
     plt.show()

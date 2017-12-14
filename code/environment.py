@@ -1,5 +1,5 @@
 """
-Implementation of a basic RL environment.
+Implementation of a basic RL environments.
 
 author: iosband@stanford.edu
 Edit : Jules Kozolinsky
@@ -138,9 +138,6 @@ class MDP(Environment):
             cumul_reward += reward
             state = nexts
             action = policy[state]
-            if (term):
-                print('Not implemented for finite horizon MDP')
-                break
         return cumul_reward/T_max
 
     def compute_regret(self, policy, T_max):

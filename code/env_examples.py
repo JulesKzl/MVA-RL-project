@@ -2,7 +2,6 @@
 
 from environment import *
 
-
 def make_MDP_TP1():
     """ MDP from TP1 RL """
     n_states = 3

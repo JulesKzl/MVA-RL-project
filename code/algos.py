@@ -1,13 +1,7 @@
 """
-This is a collection of some of the classic benchmark algorithms for efficient
-reinforcement learning
-We provide implementations of:
+Implementation of PSRL and UCRL2
 
-- PSRL
-- UCRL2
-
-author: iosband@stanford.edu
-author: Ronan Fruit
+Used Ian Osband and Ronan Fruit's code
 Edit : Jules Kozolinsky
 """
 
@@ -15,33 +9,18 @@ import numpy as np
 import math as m
 import time
 
-def argmax(seq, fn):
-    best = seq[0]; best_score = fn(best)
-    for x in seq:
-        x_score = fn(x)
-        if x_score > best_score:
-            best, best_score = x, x_score
-    return best
 
 class Agent:
     """
-    Simple tabular Bayesian learner from Tabula Rasa.
-
-    Child agents will mainly implement:
-        update_policy
+    Learning Agent (Childs: UCRL2 and PSRL)
     """
 
     def __init__(self, env, r_max):
         """
-        Args:
-            env: environment
-            r_max - maximum reward
-            # alpha0 - prior weight for uniform Dirichlet
-            # mu0 - prior mean rewards
-            # tau0 - precision of prior mean rewards
+        Initialize our learning agent
 
-        Returns:
-            Learner
+        :param env: RL environment
+        :r_max: upper bound of environment reward
         """
         self.n_states = env.n_states
         self.n_actions = env.n_actions
@@ -52,8 +31,11 @@ class Agent:
         self.iteration = 0
         self.delta = 1
 
+        # mu0 - prior mean rewards
         self.mu0 = self.r_max + 99.
+        # tau0 - precision of prior mean rewards
         self.tau0 = 1.
+        # alpha0 - prior weight for uniform Dirichlet
         self.alpha0 = 1.
 
         # Now make the prior beliefs
@@ -65,26 +47,36 @@ class Agent:
                 self.P_prior[state, action] = (
                     self.alpha0 * np.ones(self.n_states, dtype=np.float32))
 
+        # Keep trace of number of observations
         self.nb_observations = np.zeros((n_states, n_actions), dtype=np.int64)
         self.nu_k = np.zeros((n_states, n_actions), dtype=np.int64)
 
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
-        self.rho_star = env.compute_LTAR(env.pi_star, 100000)
+
+        if hasattr(env, 'pi_star'):
+            self.rho_star = env.compute_LTAR(env.pi_star, 100000)
+        else:
+            print("Pi star is not known")
 
     def pick_action(self, state):
         """
         Use policy for action selection
+
+        :param state: current state in which we want to know the corresponding
+        action
+        :return: action from policy
         """
         action = self.policy[state]
         return action
 
-    def update_estimations(self, s, s2, r, absorb, t):
+    def update_models(self, s, s2, r, absorb):
         """
+        Update model during execution of policy
+
         :param s: current state
         :param s2: new state
         :param r: reward
-        :param t: timestep
         """
         a = self.policy[s]
 
@@ -104,17 +96,25 @@ class Agent:
         self.iteration += 1
 
     def execute_policy(self, env, max_duration):
+        """
+        Execute policy in the environment during max time of max_duration
+
+        :param env: given RL environment
+        :param max_duration: maximum execution time
+        """
+        # Initialize env
         state = env.reset()
         action = self.pick_action(state)
         t = 0
         while (self.nu_k[state][action] < max(1, self.nb_observations[state][action])\
                 and t < max_duration):
+            t += 1 # Avoid infinite loop
+
             # Step through the episode
             new_state, reward, absorb = env.step(state, action)
 
             # Update estimations at each step
-            t = env.timestep
-            self.update_estimations(state, new_state, reward, absorb, t)
+            self.update_models(state, new_state, reward, absorb)
             state = new_state
 
             # Select next action
@@ -170,9 +170,6 @@ class PSRL(Agent):
         """
         Returns a single sampled MDP from the posterior.
 
-        Args:
-            NULL
-
         Returns:
             R_samp - R_samp[s, a] is the sampled mean reward for (s,a)
             P_samp - P_samp[s, a] is the sampled transition vector for (s,a)
@@ -197,17 +194,13 @@ class PSRL(Agent):
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-        t0 = time.time()
         span_value = self.value_iteration(P_samp, R_samp, epsilon)
-        t1 = time.time()
 
 #-----------------------------------------------------------------------------
 # UCRL2
 #-----------------------------------------------------------------------------
 
 class UCRL2(Agent):
-    """Classic benchmark optimistic algorithm"""
-
     def __init__(self, env, r_max):
         super(UCRL2, self).__init__(env, r_max)
         self.name = "UCRL2"
@@ -307,6 +300,9 @@ class UCRL2(Agent):
                 sorted_indices = np.argsort(u1)
 
     def estimated_mdp(self):
+        """
+        Returns estimated MDP from the prior.
+        """
         R_hat = {}
         P_hat = {}
         for s in range(self.n_states):
