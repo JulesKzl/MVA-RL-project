@@ -15,7 +15,7 @@ class Agent:
     Learning Agent (Childs: UCRL2 and PSRL)
     """
 
-    def __init__(self, env, r_max):
+    def __init__(self, env, r_max, verbose=0):
         """
         Initialize our learning agent
 
@@ -54,6 +54,7 @@ class Agent:
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
 
+        self.verbose = verbose
         if hasattr(env, 'pi_star'):
             self.rho_star = env.compute_LTAR(env.pi_star, 100000)
         else:
@@ -102,6 +103,10 @@ class Agent:
         :param env: given RL environment
         :param max_duration: maximum execution time
         """
+        if (self.verbose > 0):
+            print("> Execute policy.")
+        time0 = time.time()
+
         # Initialize env
         state = env.reset()
         action = self.pick_action(state)
@@ -122,6 +127,12 @@ class Agent:
 
         # Update nb of observations
         self.nb_observations += self.nu_k
+        self.nu_k.fill(0)
+
+        if (self.verbose > 1):
+            print(" took", time.time() - time0, "s.")
+        if (self.verbose > 0):
+            print(" in", t, "iterations.")
 
 
 #-----------------------------------------------------------------------------
@@ -132,8 +143,8 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
-    def __init__(self, env, r_max):
-        super(PSRL, self).__init__(env, r_max)
+    def __init__(self, env, r_max, verbose=0):
+        super(PSRL, self).__init__(env, r_max, verbose)
         self.name = "PSRL"
 
     def value_iteration(self, P_samp, R_samp, epsilon):
@@ -229,6 +240,9 @@ class PSRL(Agent):
         """
         Compute PSRL via value iteration.
         """
+        if (self.verbose > 0):
+            print("> Update policy.")
+        time0 = time.time()
         self.delta = 1 / np.sqrt(self.iteration + 1)
         # Approximate MDP
         P_samp, R_samp = self.sample_mdp()
@@ -236,14 +250,18 @@ class PSRL(Agent):
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
         span_value = self.value_iteration(P_samp, R_samp, epsilon)
+        if (self.verbose > 1):
+            print(" took", time.time() - time0, "s.")
+        if (self.verbose > 0):
+            print(" -> New policy:", self.policy)
 
 #-----------------------------------------------------------------------------
 # UCRL2
 #-----------------------------------------------------------------------------
 
 class UCRL2(Agent):
-    def __init__(self, env, r_max):
-        super(UCRL2, self).__init__(env, r_max)
+    def __init__(self, env, r_max, verbose=0):
+        super(UCRL2, self).__init__(env, r_max, verbose)
         self.name = "UCRL2"
 
     def chernoff(self, it, N, delta, sqrt_C, log_C, range=1.):
@@ -356,6 +374,9 @@ class UCRL2(Agent):
         """
         Compute UCRL2 via extended value iteration.
         """
+        if (self.verbose > 0):
+            print("> Update policy.")
+        time0 = time.time()
         self.delta = 1 / np.sqrt(self.iteration + 1)
         # Approximate MDP
         P_hat, R_hat = self.estimated_mdp()
@@ -363,6 +384,8 @@ class UCRL2(Agent):
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-        t0 = time.time()
         span_value = self.extended_value_iteration(P_hat, R_hat, P_slack, R_slack, epsilon)
-        t1 = time.time()
+        if (self.verbose > 1):
+            print(" took", time.time() - time0, "s.")
+        if (self.verbose > 0):
+            print(" -> New policy:", self.policy)
