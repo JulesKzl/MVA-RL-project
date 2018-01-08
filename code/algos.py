@@ -69,7 +69,7 @@ class Agent:
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
 
         self.verbose = verbose
-        if hasattr(env, 'pi_star'):
+        if (env.pi_star != None):
             self.rho_star = env.compute_LTAR(env.pi_star, 100000)
         else:
             print("Pi star is not known")
@@ -370,8 +370,8 @@ class UCRL2(Agent):
                     vec[s] -= 1
                     r_optimal = R_hat[s, a] + R_slack[s][a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v > u2[s]:  # optimal policy = argmax
-                        u2[s] = v
+                    if first_action or v + u1[s] > u2[s]:  # optimal policy = argmax
+                        u2[s] = v + u1[s]
                         self.policy[s] = a
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI

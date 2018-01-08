@@ -13,7 +13,7 @@ import copy #Gridwold
 class Environment(object):
     """General RL environment"""
 
-    def __init__(self, n_states, n_actions):
+    def __init__(self, n_states, n_actions, pi_star=None):
         """
         Initialize Env
 
@@ -26,6 +26,7 @@ class Environment(object):
         """
         self.n_states = n_states
         self.n_actions = n_actions
+        self.pi_star = None
 
     def reset(self):
         """
@@ -141,9 +142,12 @@ class MDP(Environment):
         return cumul_reward/T_max
 
     def compute_regret(self, policy, T_max):
-        E_star = self.compute_LTAR(self.pi_star, T_max)
-        E = self.compute_LTAR(policy, T_max)
-        return T_max*(E_star - E)
+        if (self.pi_star != None):
+            E_star = self.compute_LTAR(self.pi_star, T_max)
+            E = self.compute_LTAR(policy, T_max)
+            return T_max*(E_star - E)
+        else:
+            return 0
 
 #-------------------------------------------------------------------------------
 
