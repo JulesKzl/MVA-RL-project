@@ -165,6 +165,47 @@ class PSRL(Agent):
                 u2 = np.empty(self.n_states)
                 sorted_indices = np.argsort(u1)
 
+    def value_iteration_modified(self, P_samp, R_samp, epsilon, C):
+        """
+        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the 
+        span of the bias vector
+
+        :param P_samp: sampled probability
+        :param R_samp: sampled rewads
+        :param epsilon: desired accuracy
+        """
+        u1 = np.zeros(self.n_states)
+        sorted_indices = np.arange(self.n_states)
+        u2 = np.zeros(self.n_states)
+        counter = 0
+        while True:
+            counter += 1
+            min_u2 = float("inf")
+            for s in range(0, self.n_states):
+                first_action = True
+                for a in range(self.n_actions):
+                    vec = P_samp[s, a]
+                    r_optimal = R_samp[s, a]
+                    v = r_optimal + np.dot(vec, u1)
+                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
+                        u2[s] = v + u1[s]
+                        self.policy[s] = a
+                    first_action = False
+
+                if u2[s] < min_u2:
+                    min_u2 = u2[s]    
+
+            u2 = np.clip(u2, None, min_u2 + C)
+
+            if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
+                return max(u1) - min(u1), u1, u2
+
+
+            else:
+                u1 = u2
+                u2 = np.empty(self.n_states)
+                sorted_indices = np.argsort(u1)
+
 
     def sample_mdp(self):
         """
