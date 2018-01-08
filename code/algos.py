@@ -1,3 +1,4 @@
+# coding: utf-8
 """
 Implementation of PSRL and UCRL2
 
