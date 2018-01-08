@@ -154,8 +154,8 @@ class PSRL(Agent):
                     vec = P_samp[s, a]
                     r_optimal = R_samp[s, a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
-                        u2[s] = v + u1[s]
+                    if first_action or v > u2[s]:  # optimal policy = argmax
+                        u2[s] = v
                         self.policy[s] = a
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
@@ -167,7 +167,7 @@ class PSRL(Agent):
 
     def value_iteration_modified(self, P_samp, R_samp, epsilon, C):
         """
-        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the 
+        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the
         span of the bias vector
 
         :param P_samp: sampled probability
@@ -187,13 +187,13 @@ class PSRL(Agent):
                     vec = P_samp[s, a]
                     r_optimal = R_samp[s, a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
-                        u2[s] = v + u1[s]
+                    if first_action or v > u2[s]:  # optimal policy = argmax
+                        u2[s] = v
                         self.policy[s] = a
                     first_action = False
 
                 if u2[s] < min_u2:
-                    min_u2 = u2[s]    
+                    min_u2 = u2[s]
 
             u2 = np.clip(u2, None, min_u2 + C)
 
@@ -329,8 +329,8 @@ class UCRL2(Agent):
                     vec[s] -= 1
                     r_optimal = R_hat[s, a] + R_slack[s][a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
-                        u2[s] = v + u1[s]
+                    if first_action or v > u2[s]:  # optimal policy = argmax
+                        u2[s] = v
                         self.policy[s] = a
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI

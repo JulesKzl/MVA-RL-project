@@ -12,6 +12,6 @@ agent = ag.PSRL(env_TP1, max_reward)
 
 N = 99
 # N = 100
+print(env_TP1.pi_star)
 exp.run_experiment(agent, env_TP1, N, 100)
 print(agent.policy)
-# print(env_TP1.pi_star)

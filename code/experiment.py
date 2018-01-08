@@ -23,7 +23,7 @@ def run_experiment(agent, env, nb_simu, N_samples, seed=1):
     for k in tqdm(range(nb_simu), desc="Simulating {}".format(agent.name)):
         # Compute policy π ̃k:
         agent.update_policy()
-        # print(agent.policy)
+        print(agent.policy)
         # Execute policy π ̃k on environnement during a max of max_duration:
         agent.execute_policy(env, max_duration)
 
@@ -34,6 +34,7 @@ def run_experiment(agent, env, nb_simu, N_samples, seed=1):
             E = env.compute_regret(agent.policy, T_max/N_samples)
             E_list.append(E)
         E_mean = np.array(E_list).mean()
+        print(E_mean)
         E_var = np.array(E_list).var()
         E_eps_mean.append(E_mean)
 
