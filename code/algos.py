@@ -9,6 +9,20 @@ import numpy as np
 import math as m
 import time
 
+float_formatter = lambda x: "%.2f" % x
+np.set_printoptions(formatter={'float_kind':float_formatter})
+
+def dict_to_matrix(dict_to_transform, n_states, n_actions):
+    M = np.zeros((n_states, n_actions))
+    for i in range(n_states):
+        for j in range(n_actions):
+            M[i, j] = dict_to_transform[i, j][0]
+    return M
+
+def print_dict_array(dict1, dict2):
+    for (i, j) in dict1.keys():
+        dit1_ij = dict1[i, j]/np.sum(dict1[i, j])
+        print("(", i, ",", j, "):", dit1_ij, dict2[i, j])
 
 class Agent:
     """
@@ -91,6 +105,7 @@ class Agent:
         self.R_prior[s, a] = mu1, tau1
 
         if (not absorb):
+            # print("Update P_prior:", s, a, "->", s2)
             self.P_prior[s, a][s2] += 1
 
         self.nu_k[s][a] += 1
@@ -133,6 +148,14 @@ class Agent:
             print(" took", time.time() - time0, "s.")
         if (self.verbose > 0):
             print(" in", t, "iterations.")
+        if (self.verbose > 2):
+            print("|R_prior - R|:")
+            R_prior_mat = dict_to_matrix(self.R_prior, self.n_states, self.n_actions)
+            R_mat = dict_to_matrix(env.R, self.n_states, self.n_actions)
+            print(np.array(R_prior_mat))
+            print(np.array(R_mat))
+            print("|P_prior - P|:")
+            print_dict_array(self.P_prior, env.P)
 
 
 #-----------------------------------------------------------------------------
