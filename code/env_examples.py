@@ -19,26 +19,26 @@ def make_MDP_TP1():
     P_true[0,0][0] = 0.45
     P_true[0,0][2] = 0.55
     # R_true[0,0] = (-0.4, 0)
-    R_true[0,0] = (1.6, 0)
+    R_true[0,0] = (16, 0)
     P_true[0,1][2] = 1
     # R_true[0,1] = (0, 0)
-    R_true[0,1] = (2, 0)
+    R_true[0,1] = (20, 0)
     P_true[1,0][2] = 1
     # R_true[1,0] = (2, 0)
-    R_true[1,0] = (4, 0)
+    R_true[1,0] = (40, 0)
     P_true[1,1][0] = 0.5
     P_true[1,1][1] = 0.4
     P_true[1,1][2] = 0.1
     # R_true[1,1] = (0, 0)
-    R_true[1,1] = (2, 0)
+    R_true[1,1] = (20, 0)
     P_true[2,0][0] = 0.6
     P_true[2,0][2] = 0.4
     # R_true[2,0] = (-1, 0)
-    R_true[2,0] = (1, 0)
+    R_true[2,0] = (10, 0)
     P_true[2,1][1] = 0.9
     P_true[2,1][2] = 0.1
     # R_true[2,1] = (-0.5, 0)
-    R_true[2,1] = (1.5, 0)
+    R_true[2,1] = (15, 0)
 
     MDP_TP1 = MDP(n_states, n_actions)
     MDP_TP1.R = R_true
@@ -47,6 +47,51 @@ def make_MDP_TP1():
     MDP_TP1.pi_star = [1, 0, 1]
 
     return MDP_TP1
+
+def make_MDP_Pierre():
+    """ MDP from Pierre """
+    n_states = 4
+    n_actions = 2
+
+    R_true = {}
+    P_true = {}
+
+    for s in range(n_states):
+        for a in range(n_actions):
+            R_true[s, a] = (0, 0)
+            P_true[s, a] = np.zeros(n_states)
+
+    P_true[0,0][1] = 1
+    R_true[0,0] = (1, 0)
+    P_true[0,1][0] = 1
+    R_true[0,1] = (2, 0)
+
+    P_true[1,0][0] = 0.4
+    P_true[1,0][2] = 0.6
+    R_true[1,0] = (1, 0)
+    P_true[1,1][0] = 0.7
+    P_true[1,1][2] = 0.3
+    R_true[1,1] = (1, 0)
+
+    P_true[2,0][3] = 0.4
+    P_true[2,0][1] = 0.6
+    R_true[2,0] = (1, 0)
+    P_true[2,1][3] = 0.7
+    P_true[2,1][1] = 0.3
+    R_true[2,1] = (1, 0)
+
+    P_true[3,0][2] = 1
+    R_true[3,0] = (1, 0)
+    P_true[3,1][3] = 1
+    R_true[3,1] = (100, 0)
+
+    MDP_Pierre = MDP(n_states, n_actions)
+    MDP_Pierre.R = R_true
+    MDP_Pierre.P = P_true
+
+    # MDP_Pierre.pi_star = [1, 0, 1]
+
+    return MDP_Pierre
 
 
 def make_riverSwim(n_states=6, time_horizon=20):
@@ -86,7 +131,9 @@ def make_riverSwim(n_states=6, time_horizon=20):
     P_true[n_states - 1, 1][n_states - 1] = 0.6
     P_true[n_states - 1, 1][n_states - 2] = 0.4
 
-    riverSwim = TabularMDP(n_states, n_actions, time_horizon)
+
+    riverSwim = MDP(n_states, n_actions)
+    # riverSwim = TabularMDP(n_states, n_actions, time_horizon)
     riverSwim.R = R_true
     riverSwim.P = P_true
 

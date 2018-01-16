@@ -126,21 +126,27 @@ class MDP(Environment):
 
         return next_state, reward, absorb
 
-
-    def compute_LTAR(self, policy, T_max):
+    def compute_cumul_reward(self, policy, T_max, init_state=None):
         """ Compute long-term average reward """
-        # N = np.zeros((self.n_states, self.n_actions))
         t = 0
-        cumul_reward = 0
-        state = self.reset()
+        cumul_reward = []
+        if (init_state == None):
+            state = self.reset()
+        else:
+            state = init_state
         action = policy[state]
         while (t < T_max): #or terminal
             t += 1
             nexts, reward, term = self.step(state, action)
-            cumul_reward += reward
+            cumul_reward.append(reward)
             state = nexts
             action = policy[state]
-        return cumul_reward/T_max
+        return cumul_reward
+
+    def compute_LTAR(self, policy, T_max):
+        """ Compute long-term average reward """
+        cumul_reward = self.compute_cumul_reward(policy, T_max)
+        return np.sum(cumul_reward)/T_max
 
     def compute_regret(self, policy, T_max):
         if (self.pi_star != None):

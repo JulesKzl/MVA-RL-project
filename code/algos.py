@@ -167,9 +167,10 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
-    def __init__(self, env, r_max, verbose=0):
+    def __init__(self, env, r_max, verbose=0, C=None):
         super(PSRL, self).__init__(env, r_max, verbose)
         self.name = "PSRL"
+        self.C = C
 
     def value_iteration(self, P_samp, R_samp, epsilon):
         """
@@ -273,7 +274,11 @@ class PSRL(Agent):
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-        span_value = self.value_iteration(P_samp, R_samp, epsilon)
+        if (self.C == None):
+            span_value = self.value_iteration(P_samp, R_samp, epsilon)
+        else:
+            span_value = self.value_iteration_modified(P_samp, R_samp, epsilon, self.C)
+
         if (self.verbose > 1):
             print(" took", time.time() - time0, "s.")
         if (self.verbose > 0):
