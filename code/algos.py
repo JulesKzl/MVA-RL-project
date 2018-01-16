@@ -1,4 +1,5 @@
-# coding: utf-8
+#coding utf-8
+
 """
 Implementation of PSRL and UCRL2
 
@@ -9,28 +10,15 @@ Edit : Jules Kozolinsky
 import numpy as np
 import math as m
 import time
+import env_examples as env
 
-float_formatter = lambda x: "%.2f" % x
-np.set_printoptions(formatter={'float_kind':float_formatter})
-
-def dict_to_matrix(dict_to_transform, n_states, n_actions):
-    M = np.zeros((n_states, n_actions))
-    for i in range(n_states):
-        for j in range(n_actions):
-            M[i, j] = dict_to_transform[i, j][0]
-    return M
-
-def print_dict_array(dict1, dict2):
-    for (i, j) in dict1.keys():
-        dit1_ij = dict1[i, j]/np.sum(dict1[i, j])
-        print("(", i, ",", j, "):", dit1_ij, dict2[i, j])
 
 class Agent:
     """
     Learning Agent (Childs: UCRL2 and PSRL)
     """
 
-    def __init__(self, env, r_max, verbose=0):
+    def __init__(self, env, r_max):
         """
         Initialize our learning agent
 
@@ -69,8 +57,7 @@ class Agent:
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
 
-        self.verbose = verbose
-        if (env.pi_star != None):
+        if hasattr(env, 'pi_star'):
             self.rho_star = env.compute_LTAR(env.pi_star, 100000)
         else:
             print("Pi star is not known")
@@ -106,7 +93,6 @@ class Agent:
         self.R_prior[s, a] = mu1, tau1
 
         if (not absorb):
-            # print("Update P_prior:", s, a, "->", s2)
             self.P_prior[s, a][s2] += 1
 
         self.nu_k[s][a] += 1
@@ -119,10 +105,6 @@ class Agent:
         :param env: given RL environment
         :param max_duration: maximum execution time
         """
-        if (self.verbose > 0):
-            print("> Execute policy.")
-        time0 = time.time()
-
         # Initialize env
         state = env.reset()
         action = self.pick_action(state)
@@ -143,20 +125,6 @@ class Agent:
 
         # Update nb of observations
         self.nb_observations += self.nu_k
-        self.nu_k.fill(0)
-
-        if (self.verbose > 1):
-            print(" took", time.time() - time0, "s.")
-        if (self.verbose > 0):
-            print(" in", t, "iterations.")
-        if (self.verbose > 2):
-            print("|R_prior - R|:")
-            R_prior_mat = dict_to_matrix(self.R_prior, self.n_states, self.n_actions)
-            R_mat = dict_to_matrix(env.R, self.n_states, self.n_actions)
-            print(np.array(R_prior_mat))
-            print(np.array(R_mat))
-            print("|P_prior - P|:")
-            print_dict_array(self.P_prior, env.P)
 
 
 #-----------------------------------------------------------------------------
@@ -167,8 +135,8 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
-    def __init__(self, env, r_max, verbose=0):
-        super(PSRL, self).__init__(env, r_max, verbose)
+    def __init__(self, env, r_max):
+        super(PSRL, self).__init__(env, r_max)
         self.name = "PSRL"
 
     def value_iteration(self, P_samp, R_samp, epsilon):
@@ -178,7 +146,6 @@ class PSRL(Agent):
         :param epsilon: desired accuracy
         """
         u1 = np.zeros(self.n_states)
-        sorted_indices = np.arange(self.n_states)
         u2 = np.zeros(self.n_states)
         counter = 0
         while True:
@@ -189,7 +156,7 @@ class PSRL(Agent):
                     vec = P_samp[s, a]
                     r_optimal = R_samp[s, a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v > u2[s]:  # optimal policy = argmax
+                    if first_action or v > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
                         u2[s] = v
                         self.policy[s] = a
                     first_action = False
@@ -198,11 +165,10 @@ class PSRL(Agent):
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
-                sorted_indices = np.argsort(u1)
 
     def value_iteration_modified(self, P_samp, R_samp, epsilon, C):
         """
-        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the
+        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the 
         span of the bias vector
 
         :param P_samp: sampled probability
@@ -210,36 +176,64 @@ class PSRL(Agent):
         :param epsilon: desired accuracy
         """
         u1 = np.zeros(self.n_states)
-        sorted_indices = np.arange(self.n_states)
         u2 = np.zeros(self.n_states)
         counter = 0
         while True:
             counter += 1
-            min_u2 = float("inf")
             for s in range(0, self.n_states):
                 first_action = True
                 for a in range(self.n_actions):
                     vec = P_samp[s, a]
                     r_optimal = R_samp[s, a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v > u2[s]:  # optimal policy = argmax
+                    if first_action or v > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
                         u2[s] = v
-                        self.policy[s] = a
-                    first_action = False
+                        first_action = False
 
                 if u2[s] < min_u2:
-                    min_u2 = u2[s]
+                    min_u2 = u2[s]    
 
             u2 = np.clip(u2, None, min_u2 + C)
 
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
-                return max(u1) - min(u1), u1, u2
+                
+                #update policy 
+                for s in range(self.n_states):
+                    span_break = False
+                    a_p = -1
+                    a_m = -1 
+                    v_p = float("inf")
+                    v_m = -float("inf")
+                    for a in range(self.n_actions):
+                        vec = P_samp[s, a]
+                        r_optimal = R_samp[s, a]
+                        v = r_optimal + np.dot(vec, u1)
+                        
+                        if v_m < v < v_min +C:
+                            v_m = v
+                            a_m = a
+                        
+                        elif v_p > v > v_min +C:
+                            span_break = True
+                            v_p = v
+                            a_p = a
 
+                    if not span_break:
+                        policy[s] = a_m #truncation/interpolation not needed.  
+                    else:
+                        q = (v_p -(v_min +C))/(v_p - v_m)
+                        coin = np.random.rand() < q # True with probability q, False with proba 1-q
+                        if coin:
+                            policy[s] = a_m
+                        else:
+                            policy[s] = a_p
+
+                # return
+                return max(u2) - min(u2), u1, u2
 
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
-                sorted_indices = np.argsort(u1)
 
 
     def sample_mdp(self):
@@ -264,28 +258,21 @@ class PSRL(Agent):
         """
         Compute PSRL via value iteration.
         """
-        if (self.verbose > 0):
-            print("> Update policy.")
-        time0 = time.time()
         self.delta = 1 / np.sqrt(self.iteration + 1)
         # Approximate MDP
         P_samp, R_samp = self.sample_mdp()
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-        span_value = self.value_iteration(P_samp, R_samp, epsilon)
-        if (self.verbose > 1):
-            print(" took", time.time() - time0, "s.")
-        if (self.verbose > 0):
-            print(" -> New policy:", self.policy)
+        span_value = self.value_iteration_modified(P_samp, R_samp, epsilon)
 
 #-----------------------------------------------------------------------------
 # UCRL2
 #-----------------------------------------------------------------------------
 
 class UCRL2(Agent):
-    def __init__(self, env, r_max, verbose=0):
-        super(UCRL2, self).__init__(env, r_max, verbose)
+    def __init__(self, env, r_max):
+        super(UCRL2, self).__init__(env, r_max)
         self.name = "UCRL2"
 
     def chernoff(self, it, N, delta, sqrt_C, log_C, range=1.):
@@ -371,7 +358,7 @@ class UCRL2(Agent):
                     vec[s] -= 1
                     r_optimal = R_hat[s, a] + R_slack[s][a]
                     v = r_optimal + np.dot(vec, u1)
-                    if first_action or v + u1[s] > u2[s]:  # optimal policy = argmax
+                    if first_action or v + u1[s] > u2[s] or m.isclose(v + u1[s], u2[s]):  # optimal policy = argmax
                         u2[s] = v + u1[s]
                         self.policy[s] = a
                     first_action = False
@@ -398,9 +385,6 @@ class UCRL2(Agent):
         """
         Compute UCRL2 via extended value iteration.
         """
-        if (self.verbose > 0):
-            print("> Update policy.")
-        time0 = time.time()
         self.delta = 1 / np.sqrt(self.iteration + 1)
         # Approximate MDP
         P_hat, R_hat = self.estimated_mdp()
@@ -408,8 +392,22 @@ class UCRL2(Agent):
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
+        t0 = time.time()
         span_value = self.extended_value_iteration(P_hat, R_hat, P_slack, R_slack, epsilon)
-        if (self.verbose > 1):
-            print(" took", time.time() - time0, "s.")
-        if (self.verbose > 0):
-            print(" -> New policy:", self.policy)
+        t1 = time.time()
+
+
+### Test value_iteration
+if __name__ == "__main__":
+    env_TP1 = env.make_MDP_TP1()
+    # env_TP1 = env.make_riverSwim()
+    max_reward = 5
+    agent = PSRL(env_TP1, max_reward)
+    
+    R = env_TP1.R
+    R= [r[0] for r in R]
+    P = env_TP1.P
+
+    _,_,_ = agent.value_iteration(P,R, 1e-4)
+    policy_op = agent.policy
+    print(policy_op)
