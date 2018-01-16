@@ -135,13 +135,8 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
-<<<<<<< HEAD
     def __init__(self, env, r_max, verbose=0, C=None):
         super(PSRL, self).__init__(env, r_max, verbose)
-=======
-    def __init__(self, env, r_max):
-        super(PSRL, self).__init__(env, r_max)
->>>>>>> 98a165dd7df5a21afbdbbb6d53ffb7e8f36c65d3
         self.name = "PSRL"
         self.C = C
 
@@ -174,7 +169,7 @@ class PSRL(Agent):
 
     def value_iteration_modified(self, P_samp, R_samp, epsilon, C):
         """
-        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the 
+        Implement value_iteration with modified Bellman Operator that converges to a solution respecting the constraint on the
         span of the bias vector
 
         :param P_samp: sampled probability
@@ -197,35 +192,35 @@ class PSRL(Agent):
                         first_action = False
 
                 if u2[s] < min_u2:
-                    min_u2 = u2[s]    
+                    min_u2 = u2[s]
 
             u2 = np.clip(u2, None, min_u2 + C)
 
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
-                
-                #update policy 
+
+                #update policy
                 for s in range(self.n_states):
                     span_break = False
                     a_p = -1
-                    a_m = -1 
+                    a_m = -1
                     v_p = float("inf")
                     v_m = -float("inf")
                     for a in range(self.n_actions):
                         vec = P_samp[s, a]
                         r_optimal = R_samp[s, a]
                         v = r_optimal + np.dot(vec, u1)
-                        
+
                         if v_m < v < v_min +C:
                             v_m = v
                             a_m = a
-                        
+
                         elif v_p > v > v_min +C:
                             span_break = True
                             v_p = v
                             a_p = a
 
                     if not span_break:
-                        policy[s] = a_m #truncation/interpolation not needed.  
+                        policy[s] = a_m #truncation/interpolation not needed.
                     else:
                         q = (v_p -(v_min +C))/(v_p - v_m)
                         coin = np.random.rand() < q # True with probability q, False with proba 1-q
@@ -270,7 +265,6 @@ class PSRL(Agent):
 
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
-<<<<<<< HEAD
         if (self.C == None):
             span_value = self.value_iteration(P_samp, R_samp, epsilon)
         else:
@@ -280,9 +274,6 @@ class PSRL(Agent):
             print(" took", time.time() - time0, "s.")
         if (self.verbose > 0):
             print(" -> New policy:", self.policy)
-=======
-        span_value = self.value_iteration_modified(P_samp, R_samp, epsilon)
->>>>>>> 98a165dd7df5a21afbdbbb6d53ffb7e8f36c65d3
 
 #-----------------------------------------------------------------------------
 # UCRL2
@@ -421,7 +412,7 @@ if __name__ == "__main__":
     # env_TP1 = env.make_riverSwim()
     max_reward = 5
     agent = PSRL(env_TP1, max_reward)
-    
+
     R = env_TP1.R
     R= [r[0] for r in R]
     P = env_TP1.P
