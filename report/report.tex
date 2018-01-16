@@ -1,104 +1,131 @@
-\documentclass[a4paper,10pt]{article}
 
-\usepackage[utf8]{inputenc} 
-\usepackage[T1]{fontenc}     
-%\usepackage[francais]{babel}
+\documentclass{article}
 
-\usepackage[top=2cm, bottom=2cm, left=2cm, right=2cm]{geometry}
+% if you need to pass options to natbib, use, e.g.:
+% \PassOptionsToPackage{options}{natbib}
+% before loading nips_2017
+%
+% to avoid loading the natbib package, add option nonatbib:
+% \usepackage[nonatbib]{nips_2017}
 
-\usepackage{graphicx}
+\usepackage[final]{nips_2017}
 
-\usepackage{amsthm}
+% to compile a camera-ready version, add the [final] option, e.g.:
+% \usepackage[final]{nips_2017}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
 \usepackage{amsmath}
-\usepackage{amssymb} 	
+  \usepackage{ dsfont }
+  \usepackage{stmaryrd}
 
-\usepackage{url}
+  \usepackage{graphicx}
+  \usepackage{subcaption}
 
-\usepackage{algorithm}
-\usepackage{algorithmic}
-%\usepackage[backref, hidelinks]{hyperref}
-
-\usepackage{a4wide}
-
-%%%% debut macro %%%%
-\newenvironment{changemargin}[3]{\begin{list}{}{%
-\setlength{\topsep}{0pt}%
-\setlength{\leftmargin}{0pt}%
-\setlength{\rightmargin}{0pt}%
-\setlength{\topmargin}{0pt}%
-\setlength{\listparindent}{\parindent}%
-\setlength{\itemindent}{\parindent}%
-\setlength{\parsep}{0pt plus 1pt}%
-\addtolength{\leftmargin}{#1}%
-\addtolength{\rightmargin}{#2}%
-\addtolength{\topmargin}{#3}%
-}\item }{\end{list}}
-%%%% fin macro %%%%
-
-\newcommand{\argmax}[1]{\underset{#1}{\operatorname{argmax}}\;}
+\usepackage[ruled,vlined]{algorithm2e}
 
 \title{Thompson Sampling (PSRL) under bias span constraint}
-\author{Pierre \textsc{Bizeul}, Jules \textsc{Kozolinsky} }
-\date\today 
-\makeindex
+%\makeindex
+
+\author{
+  Pierre Bizeul\\
+  École normale supérieure Paris-Saclay \\
+  \texttt{pierre.bizeul@ens-paris-saclay.fr} \\
+  \And
+  Jules Kozolinsky\\
+  École normale supérieure Paris-Saclay \\
+  \texttt{jules.kozolinsky@ens-cachan.fr} \\
+  %% examples of more authors
+\AND
+Supervised by \vspace{8pt}\\
+\textbf{Ronan Fruit}\\
+   Sequel Team - Inria Lille \\
+  %% Address \\
+ \texttt{ronan.fruit@inria.fr} \\
+}
+
+%\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\argmin}[1]{\underset{#1}{\operatorname{argmin}}\;}
+\newcommand{\argmax}[1]{\underset{#1}{\operatorname{argmax}}\;}
 
 \begin{document}
 
 \maketitle
 \tableofcontents
 
-\section{Goal of project}
+\begin{abstract}
 The Exploration-Exploitation trade-off is a fundamental dilemma in on-line reinforcement learning. Algorithms addressing this dilemma with theoretical performance guarantees have been proposed for the discounted, average and finite horizon settings. In the finite horizon setting, the usual criterion of performance is the notion of “regret” as in MAB. One of the current state-of-the-art algorithms PSRL \cite{osband2013more}  has a regret scaling linearly with the “diameter” of the unknown MDP in the worst-case (the diameter being a measure of how easy it is to navigate between any two states of the MDP). Although it has been shown that the dependency in the diameter is unavoidable in the worst-case, when additional properties on the optimal policy are known beforehand, the regret can, in theory, be drastically improved \cite{bartlett2009regal}. Unfortunately, exploiting this additional prior knowledge on the optimal policy requires solving an optimization problem (namely, “planning under bias span constraint”) and no algorithm has been derived so far to solve it. We recently started investigating a new Bellman operator converging to the solution of this problem for many MDPs. In this research project, the student(s) is/are expected to:
 \begin{enumerate}
 \item  Implement PSRL,
 \item  Integrate the modified Bellman operator to PSRL,
 \item Compare the empirical regret of the two.
 \end{enumerate}
+\end{abstract}
 
 \section{Introduction}
 \subsection{Notations}
 \paragraph{Policy\\}
 A policy $\pi$ is defined as $\pi: X \rightarrow A$.
 \paragraph{Long-term average reward for a stationnary policy\\}
-Long-term average reward $\rho_{\pi}(M)$ of a stationnary policy $\pi$ is defined as : 
+Long-term average reward $\rho_{\pi}(M)$ of a stationnary policy $\pi$ is defined as :
 \begin{align*}
 \rho_{\pi}(M) = \lim\limits_{T \rightarrow \infty} \dfrac{1}{T}E(T) = \lim\limits_{T \rightarrow \infty} \dfrac{1}{T}\sum\limits_{t = 1}^{T} r_t
 \end{align*}
-where $T$ is the number of time steps and 
+where $T$ is the number of time steps and
 $E(T)$ is the total expected reward after $T$ steps.
 
 (For proof see Proposition $8.1.1$ of \cite{puterman2014markov})
 
 \paragraph{Optimal policy\\}
-A policy is called \textit{optimal} if it maximizes the long-term average reward : 
+A policy is called \textit{optimal} if it maximizes the long-term average reward :
 \begin{align*}
 \pi^{*}(M) =  \argmax{\pi} \rho_{\pi}(M)
 \end{align*}
 We note: $\rho^{*}(M) = \rho_{\pi^{*}(M)}(M)$.
 
 \subsection{Exploration-exploitation dilemma}
-Explore the environment to estimate its parameters vs Exploit the estimates to collect reward (See Figure \ref{regret}).
+Explore the environment to estimate its parameters vs Exploit the estimates to collect reward (See Figure \ref{fig:regret}).
 
 \begin{figure}[h]
 	\includegraphics[width=\textwidth]{regret.png}
    \caption{Exploration-Exploitation in RL}
-   \label{regret}
+   \label{fig:regret}
 \end{figure}
 
 \paragraph{Cumulative regret\\}
-Cumulative regret $R_{\pi}(T)$ of a policy $\pi$ is defined as : 
+Cumulative regret $R_{\pi}(T)$ of a policy $\pi$ is defined as :
 \begin{align*}
 R_{\pi}(T) = T\rho^{*} - \sum\limits_{t = 1}^{T} r_t
 \end{align*}
 
-\section{Extended Value iteration}
+\section{The Average Reward setting}
 
 \section{Upper-confidence Bound for RL}
+\cite{bubeck2012regret}
 \subsection{Upper-confidence bound}
 \subsection{UCRL2 Algorithm}
 
 \section{Thompson Sampling for RL}
-We will use a normal distribution for the rewards and a Dirichlet distribution for the transitions. 
+We will use a normal distribution for the rewards and a Dirichlet distribution for the transitions.
+
+
+\section{REGAL and its use for PSRL}
+\subsection{REGAL}
+\subsection{Its use for PSRL}
+\subsection{A solution to the opti problem of REGAL}
+
+\section{Experimental results}
+\subsection{Implementation}
+\subsection{Results}
+
+
+\section{Conclusion}
 \bibliographystyle{plain}
 \bibliography{biblio}
 
