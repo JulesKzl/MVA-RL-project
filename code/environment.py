@@ -1,12 +1,60 @@
 # coding: utf-8
 """
-MDP Implementation.
+Implementation of a basic RL environments.
+
+author: iosband@stanford.edu
+Edit : Jules Kozolinsky
 """
 
 import numpy as np
+import numbers #Gridwold
+import copy #Gridwold
 
 #-------------------------------------------------------------------------------
-class MDP:
+class Environment(object):
+    """General RL environment"""
+
+    def __init__(self, n_states, n_actions):
+        """
+        Initialize Env
+
+        Args:
+            n_states  - int - number of states
+            n_actions - int - number of actions
+
+        Returns:
+            Environment object
+        """
+        self.n_states = n_states
+        self.n_actions = n_actions
+
+    def reset(self):
+        """
+        Returns:
+            An initial state randomly drawn from
+            the initial distribution
+        """
+        pass
+
+    def step(self, state, action):
+        """
+        Moves one step in the environment.
+
+        Args:
+            state (int): the amount of good
+            action (int): the action to be executed
+
+        Returns:
+            next_state (int): the state reached by performing the action
+            reward (float): a scalar value representing the immediate reward
+            absorb (boolean): True if the next_state is absorsing, False otherwise
+        """
+        pass
+
+
+
+#-------------------------------------------------------------------------------
+class MDP(Environment):
     """
     MDP
     Rewards are all normal.
@@ -27,8 +75,7 @@ class MDP:
         Returns:
             Environment object
         """
-        self.n_states = n_states
-        self.n_actions = n_actions
+        super(MDP, self).__init__(n_states, n_actions)
 
         self.timestep = 0
 
@@ -36,15 +83,14 @@ class MDP:
         self.R = {}
         self.P = {}
         self.max_gain = None
+        self.bias = None
         self.pi_star = np.empty(self.n_states)
 
         for state in range(n_states):
             for action in range(n_actions):
-                self.R[state, action] = 1
+                self.R[state, action] = (1, 1)
                 self.P[state, action] = np.ones(n_states) / n_states
         self.augmented = False
-
-        self.compute_gain(1e-6)
 
     def get_R(self):
         if (self.augmented):
@@ -96,7 +142,11 @@ class MDP:
             absorb (boolean): True if the next_state is absorsing, False otherwise
         """
         R = self.get_R()
-        reward = R[state, action]
+        if R[state, action][1] < 1e-9:
+            reward = R[state, action][0]
+        else:
+            reward = np.random.normal(loc=R[state, action][0],
+                                      scale=R[state, action][1])
 
         # Update the environment
         self.timestep += 1
@@ -124,6 +174,15 @@ class MDP:
         LTAR = np.sum(cumul_reward)/T_max
         return cumul_reward, LTAR
 
+    def compute_regret(self, T_max, policy, policy_opt, init_state=None):
+        cumul_reward, _ = self.compute_cumul_reward(T_max, policy, init_state)
+        if (policy_opt == []):
+            regret = None
+        else:
+            _, LTAR_opt = self.compute_cumul_reward(T_max, policy_opt, init_state)
+            regret = T_max*LTAR_opt - np.array(cumul_reward)
+        return cumul_reward, regret
+
     def augment_MDP(self):
         """ Transform MDP into augmented MDP """
         n_actions_augm = self.n_actions*2
@@ -134,7 +193,7 @@ class MDP:
             for a in range(self.n_actions):
                 R_augm[s, a] = self.R[s, a]
                 P_augm[s, a] = self.P[s, a]
-                R_augm[s, a+self.n_actions] = 0
+                R_augm[s, a+self.n_actions] = (0, 0)
                 P_augm[s, a+self.n_actions] = self.P[s, a]
 
         self.MDP_augm = MDP(self.n_states, n_actions_augm)
@@ -149,6 +208,7 @@ class MDP:
             if (policy_augm[s] >= self.n_actions):
                 policy[s] = policy_augm[s]-self.n_actions
         return policy
+    
 
     def compute_gain(self, epsilon):
         """
@@ -157,29 +217,31 @@ class MDP:
         u1 = np.zeros(self.n_states)
         u2 = np.zeros(self.n_states)
         policy_opt = np.zeros(self.n_states)
-
-        P = self.get_P()
-        R = self.get_R()
+        
+        P_samp = self.P
+        R_samp = self.R 
         counter = 0
         while True:
             counter += 1
             for s in range(0, self.n_states):
                 first_action = True
                 for a in range(self.n_actions):
-                    vec = P[s, a]
-                    r_optimal = R[s, a]
+                    vec = P_samp[s, a]
+                    r_optimal = R_samp[s, a][0]
                     v = r_optimal + np.dot(vec, u1)
                     if first_action or v > u2[s]:  # optimal policy = argmax
                         u2[s] = v
                         policy_opt[s] = a
                     first_action = False
-
+            
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 100):  # stopping condition of EVI
-
+                
                 max_gain = 0.5 * (max(u2 - u1) + min(u2 - u1))
                 self.max_gain = max_gain
                 self.pi_star = policy_opt
+                self.bias = max(u2) - min(u2)
                 break
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
+

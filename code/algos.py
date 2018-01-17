@@ -17,7 +17,7 @@ def dict_to_matrix(dict_to_transform, n_states, n_actions):
     M = np.zeros((n_states, n_actions))
     for i in range(n_states):
         for j in range(n_actions):
-            M[i, j] = dict_to_transform[i, j]
+            M[i, j] = dict_to_transform[i, j][0]
     return M
 
 def print_dict_array(dict1, dict2):
@@ -39,6 +39,8 @@ class Agent:
         """
         self.n_states = env.n_states
         self.n_actions = env.n_actions
+        n_states = self.n_states
+        n_actions = self.n_actions
         self.r_max = float(r_max)
 
         self.reward_list=[]
@@ -53,16 +55,6 @@ class Agent:
         # alpha0 - prior weight for uniform Dirichlet
         self.alpha0 = 1.
 
-        self.policy_opt = []
-        self.verbose = verbose
-
-        self.initialize()
-
-    def initialize(self):
-        n_states = self.n_states
-        n_actions = self.n_actions
-
-        self.reward_list = []
         # Now make the prior beliefs
         self.R_prior = {}
         self.P_prior = {}
@@ -75,8 +67,11 @@ class Agent:
         # Keep trace of number of observations
         self.nb_observations = np.zeros((n_states, n_actions), dtype=np.int64)
         self.nu_k = np.zeros((n_states, n_actions), dtype=np.int64)
+
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
+        self.policy_opt = []
+        self.verbose = verbose
 
     def pick_action(self, state):
         """
@@ -187,6 +182,23 @@ class Agent:
                 u1 = u2
                 u2 = np.empty(self.n_states)
 
+    def compute_optimal_policy(self, env_MDP, epsilon):
+        """ Compute optimal policy using VI"""
+        # Initialize policy
+        self.policy = np.zeros((self.n_states,), dtype=np.int_)
+        # Get R and P from MDP
+        R1 = env_MDP.get_R()
+        R = {key: R1[key][0] for key in R1.keys()}
+        P = env_MDP.get_P()
+        # Compute optimal policy with value iteration
+        _, _, v = self.value_iteration(P,R, epsilon)
+        policy_opt = self.policy
+        # Reintialize policy
+        self.policy = np.zeros((self.n_states,), dtype=np.int_)
+        self.policy_opt = policy_opt
+        return policy_opt
+
+
     def run(self, env, T_max):
         while(self.t < T_max):
             self.update_policy()
@@ -194,12 +206,9 @@ class Agent:
 
     def compute_regret(self, env):
         T = len(self.reward_list)
-        print("T", T)
         cumul_reward = np.cumsum(self.reward_list)
         gain = env.max_gain*np.arange(1,T+1)
-        var = gain - cumul_reward
-        print(np.shape(var))
-        return var
+        return (gain - cumul_reward)    
 
 
 #-----------------------------------------------------------------------------
