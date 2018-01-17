@@ -176,6 +176,9 @@ class MDP(Environment):
             regret = None
         else:
             _, LTAR_opt = self.compute_cumul_reward(T_max, policy_opt, init_state)
+            print("LTAR_opt from policy_opt:", LTAR_opt)
+            LTAR_opt = 0.5 * (max(u2 - u1) + min(u2 - u1))
+            print("LTAR_opt from policy:", LTAR_opt)
             regret = T_max*LTAR_opt - np.array(cumul_reward)
         return cumul_reward, regret
 

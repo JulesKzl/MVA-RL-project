@@ -39,8 +39,6 @@ class Agent:
         """
         self.n_states = env.n_states
         self.n_actions = env.n_actions
-        n_states = self.n_states
-        n_actions = self.n_actions
         self.r_max = float(r_max)
 
         self.iteration = 0
@@ -53,6 +51,16 @@ class Agent:
         # alpha0 - prior weight for uniform Dirichlet
         self.alpha0 = 1.
 
+        self.policy_opt = []
+        self.verbose = verbose
+
+        self.initialize()
+
+    def initialize(self):
+        n_states = self.n_states
+        n_actions = self.n_actions
+
+        self.reward_list = []
         # Now make the prior beliefs
         self.R_prior = {}
         self.P_prior = {}
@@ -65,11 +73,8 @@ class Agent:
         # Keep trace of number of observations
         self.nb_observations = np.zeros((n_states, n_actions), dtype=np.int64)
         self.nu_k = np.zeros((n_states, n_actions), dtype=np.int64)
-
         # initialize policy
         self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
-        self.policy_opt = []
-        self.verbose = verbose
 
     def pick_action(self, state):
         """
@@ -129,6 +134,7 @@ class Agent:
 
             # Step through the episode
             new_state, reward, absorb = env.step(state, action)
+            self.reward_list.append(reward)
 
             # Update estimations at each step
             self.update_models(state, new_state, reward, absorb)
@@ -190,11 +196,12 @@ class Agent:
         R = {key: R1[key][0] for key in R1.keys()}
         P = env_MDP.get_P()
         # Compute optimal policy with value iteration
-        _, _, v = self.value_iteration(P,R, epsilon)
+        _, u1, u2 = self.value_iteration(P,R, epsilon)
         policy_opt = self.policy
         # Reintialize policy
         self.policy = np.zeros((self.n_states,), dtype=np.int_)
         self.policy_opt = policy_opt
+        self.gain_opt = 0.5 * (max(u2-u1) + min(u2-u1))
         return policy_opt
 
 
