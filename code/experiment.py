@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
 
-def run_experiment(agent, env, nb_simu, N_samples, seed=1):
+def run_experiment(agent, env, T_max, nb_simu, N_samples, seed=1):
     """
     A simple script to run an experiment
 
@@ -18,25 +18,12 @@ def run_experiment(agent, env, nb_simu, N_samples, seed=1):
         seed - 1 - for reproductibility
     """
     np.random.seed(seed)
-    max_duration = 5000
-
-    # Learning
-    for k in tqdm(range(nb_simu), desc="Simulating {}".format(agent.name)):
-        # Compute policy π ̃k:
-        agent.update_policy()
-        # Execute policy π ̃k on environnement during a max of max_duration:
-        agent.execute_policy(env, max_duration)
-
-    # Evaluation of learned policy
-    T_max = 100
-    x = np.arange(1, T_max+1)
-    for state in range(env.n_states):
-        rewards_list = []
-        regret_list = []
-        for i in range(N_samples):
-            rewards, regret = env.compute_regret(T_max, agent.policy, agent.policy_opt, init_state=state)
-            rewards_list.append(rewards)
-            regret_list.append(regret)
+    regret_list = np.empty(nb_simu, T_max)
+    
+    for i in range(nb_simu):
+        agent.run(env, T_max)
+        regret_list[i,:] = agent.compute_regret(env)
+        
 
         # Display cumulative reward
         rewards_mean = np.mean(np.array(rewards_list), 0)

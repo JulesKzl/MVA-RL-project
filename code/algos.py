@@ -43,6 +43,8 @@ class Agent:
         n_actions = self.n_actions
         self.r_max = float(r_max)
 
+        self.reward_list=[]
+        self.t = 1
         self.iteration = 0
         self.delta = 1
 
@@ -108,7 +110,7 @@ class Agent:
         self.nu_k[s][a] += 1
         self.iteration += 1
 
-    def execute_policy(self, env, max_duration):
+    def execute_policy(self, env, T_max):
         """
         Execute policy in the environment during max time of max_duration
 
@@ -122,14 +124,13 @@ class Agent:
         # Initialize env
         state = env.reset()
         action = self.pick_action(state)
-        t = 0
-        while (self.nu_k[state][action] < max(1, self.nb_observations[state][action])\
-                and t < max_duration):
-            t += 1 # Avoid infinite loop
+
+        while (self.nu_k[state][action] < max(1, self.nb_observations[state][action]) and self.t<T_max):
+            self.t += 1 # Avoid infinite loop
 
             # Step through the episode
             new_state, reward, absorb = env.step(state, action)
-
+            self.reward_list.append(reward)
             # Update estimations at each step
             self.update_models(state, new_state, reward, absorb)
             state = new_state
@@ -196,6 +197,18 @@ class Agent:
         self.policy = np.zeros((self.n_states,), dtype=np.int_)
         self.policy_opt = policy_opt
         return policy_opt
+
+
+    def run(self, env, T_max):
+        while(self.t < T_max):
+            self.update_policy()
+            self.execute_policy(env, T_max)
+
+    def compute_regret(self, env):
+        T = len(self.reward_list)
+        cumul_reward = np.cumsum(self.reward_list)
+        gain = env.max_gain*np.arange(1,T+1)
+        return (gain - cumul_reward)    
 
 
 #-----------------------------------------------------------------------------

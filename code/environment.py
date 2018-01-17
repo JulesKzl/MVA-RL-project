@@ -82,6 +82,9 @@ class MDP(Environment):
         # Now initialize R and P
         self.R = {}
         self.P = {}
+        self.max_gain = None
+        self.pi_star = np.empty(self.n_states)
+
         for state in range(n_states):
             for action in range(n_actions):
                 self.R[state, action] = (1, 1)
@@ -204,3 +207,39 @@ class MDP(Environment):
             if (policy_augm[s] >= self.n_actions):
                 policy[s] = policy_augm[s]-self.n_actions
         return policy
+    
+
+    def compute_gain(self, epsilon):
+        """
+        :param epsilon: desired accuracy
+        """
+        u1 = np.zeros(self.n_states)
+        u2 = np.zeros(self.n_states)
+        policy_opt = np.zeros(self.n_states)
+        
+        P_samp = self.P
+        R_samp = self.R 
+        counter = 0
+        while True:
+            counter += 1
+            for s in range(0, self.n_states):
+                first_action = True
+                for a in range(self.n_actions):
+                    vec = P_samp[s, a]
+                    r_optimal = R_samp[s, a][0]
+                    v = r_optimal + np.dot(vec, u1)
+                    if first_action or v > u2[s]:  # optimal policy = argmax
+                        u2[s] = v
+                        policy_opt[s] = a
+                    first_action = False
+            
+            if (max(u2-u1)-min(u2-u1) < epsilon or counter > 100):  # stopping condition of EVI
+                
+                max_gain = 0.5 * (max(u2 - u1) + min(u2 - u1))
+                self.max_gain = max_gain
+                self.pi_star = policy_opt
+                break
+            else:
+                u1 = u2
+                u2 = np.empty(self.n_states)
+
