@@ -140,6 +140,53 @@ def make_riverSwim(n_states=6):
 
     return riverSwim
 
+def make_StarRiverSwim(n_branch=3, n_states=6):
+    n_total_states = n_branch*n_states + 1
+    n_actions = 2
+    R_true = {}
+    P_true = {}
+
+    # INITIALIZATION
+    # For branches
+    for n in range(n_branch):
+        for s in range(n_states):
+            for a in range(n_actions):
+                R_true[1+(n*n_states)+s, a] = (0, 0)
+                P_true[1+(n*n_states)+s, a] = np.zeros(n_total_states)
+    # For center
+    for a in range(n_actions):
+        P_true[0, a] = np.zeros(n_total_states)
+
+    # REWARDS
+    # For nodes
+    for n in range(n_branch):
+        R_true[1+(n*n_states)+n_states - 1, 1] = (1, 0)
+    # For center
+    R_true[0, 0] = (5. / 1000, 0)
+    R_true[0, 1] = (0, 0)
+
+    # Transitions
+    for n in range(n_branch):
+        for s in range(0, n_states - 1):
+            P_true[1+(n*n_states)+s, 0][1+(n*n_states)+s-1] = 1.
+            P_true[1+(n*n_states)+s, 1][min(1+(n*n_states)+n_states - 1, 1+(n*n_states)+s + 1)] = 0.35
+            P_true[1+(n*n_states)+s, 1][1+(n*n_states)+s] = 0.6
+            P_true[1+(n*n_states)+s, 1][1+(n*n_states)+s-1] = 0.05
+
+        P_true[1+(n*n_states)+n_states - 1, 0][1+(n*n_states)+n_states - 2] = 1.
+        P_true[1+(n*n_states)+n_states - 1, 1][1+(n*n_states)+n_states - 1] = 0.6
+        P_true[1+(n*n_states)+n_states - 1, 1][1+(n*n_states)+n_states - 2] = 0.4
+
+    P_true[0, 0][0] = 1.
+    P_true[0, 1][0] = 0.4
+    for n in range(n_branch):
+        P_true[0, 1][1+(n*n_states)] = 0.6/n_branch
+
+    StarRiverSwim = MDP(n_total_states, n_actions)
+    StarRiverSwim.R = R_true
+    StarRiverSwim.P = P_true
+    return StarRiverSwim
+
 def generate_random_MDP(n_states, n_actions, max_reward):
     R_random = max_reward*np.random.rand(n_states, n_actions)
 

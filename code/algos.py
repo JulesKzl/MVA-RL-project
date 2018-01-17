@@ -69,7 +69,7 @@ class Agent:
         self.nu_k = np.zeros((n_states, n_actions), dtype=np.int64)
 
         # initialize policy
-        self.policy = np.zeros((n_states,), dtype=np.int_) # initial policy
+        self.policy = np.zeros((n_states, n_actions))
         self.policy_opt = []
         self.verbose = verbose
 
@@ -81,10 +81,10 @@ class Agent:
         action
         :return: action from policy
         """
-        action = self.policy[state]
+        action = np.random.choice(self.n_actions, p=self.policy[state,:])
         return action
 
-    def update_models(self, s, s2, r, absorb):
+    def update_models(self, s, a, s2, r, absorb):
         """
         Update model during execution of policy
 
@@ -92,8 +92,6 @@ class Agent:
         :param s2: new state
         :param r: reward
         """
-        a = self.policy[s]
-
         scale_f = self.nb_observations[s][a] + self.nu_k[s][a]
         mu0, tau0 = self.R_prior[s, a]
         tau = tau0 / max(1, scale_f) #TODO Why?
@@ -132,7 +130,7 @@ class Agent:
             new_state, reward, absorb = env.step(state, action)
             self.reward_list.append(reward)
             # Update estimations at each step
-            self.update_models(state, new_state, reward, absorb)
+            self.update_models(state, action, new_state, reward, absorb)
             state = new_state
 
             # Select next action
@@ -161,6 +159,7 @@ class Agent:
         :param R_samp: sampled rewads
         :param epsilon: desired accuracy
         """
+        self.policy = np.zeros((self.n_states, self.n_actions))
         u1 = np.zeros(self.n_states)
         u2 = np.zeros(self.n_states)
         counter = 0
@@ -174,30 +173,14 @@ class Agent:
                     v = r_optimal + np.dot(vec, u1)
                     if first_action or v > u2[s]:  # optimal policy = argmax
                         u2[s] = v
-                        self.policy[s] = a
+                        self.policy[s, :] = np.zeros(self.n_actions)
+                        self.policy[s][a] = 1
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon):  # stopping condition of EVI
                 return max(u1) - min(u1), u1, u2
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
-
-    def compute_optimal_policy(self, env_MDP, epsilon):
-        """ Compute optimal policy using VI"""
-        # Initialize policy
-        self.policy = np.zeros((self.n_states,), dtype=np.int_)
-        # Get R and P from MDP
-        R1 = env_MDP.get_R()
-        R = {key: R1[key][0] for key in R1.keys()}
-        P = env_MDP.get_P()
-        # Compute optimal policy with value iteration
-        _, _, v = self.value_iteration(P,R, epsilon)
-        policy_opt = self.policy
-        # Reintialize policy
-        self.policy = np.zeros((self.n_states,), dtype=np.int_)
-        self.policy_opt = policy_opt
-        return policy_opt
-
 
     def run(self, env, T_max):
         while(self.t < T_max):
@@ -208,7 +191,7 @@ class Agent:
         T = len(self.reward_list)
         cumul_reward = np.cumsum(self.reward_list)
         gain = env.max_gain*np.arange(1,T+1)
-        return (gain - cumul_reward)    
+        return (gain - cumul_reward)
 
 
 #-----------------------------------------------------------------------------
@@ -233,6 +216,7 @@ class PSRL(Agent):
             :param R_samp: sampled rewads
             :param epsilon: desired accuracy
             """
+            self.policy = np.zeros((self.n_states, self.n_actions))
             u1 = np.zeros(self.n_states)
             u2 = np.zeros(self.n_states)
             min_u2 = float("inf")
@@ -277,15 +261,13 @@ class PSRL(Agent):
                                 v_p = v
                                 a_p = a
 
+                        self.policy[s, :] = np.zeros(self.n_actions)
                         if not span_break:
-                            self.policy[s] = a_m #truncation/interpolation not needed.
+                            self.policy[s][a_m] = 1 #truncation/interpolation not needed.
                         else:
                             q = (v_p -(min_u2 +C))/(v_p - v_m)
-                            coin = np.random.rand() < q # True with probability q, False with proba 1-q
-                            if coin:
-                                self.policy[s] = a_m
-                            else:
-                                self.policy[s] = a_p
+                            self.policy[s][a_m] = q
+                            self.policy[s][a_p] = 1-q
 
                     # return
                     return max(u2) - min(u2), u1, u2
@@ -324,17 +306,48 @@ class PSRL(Agent):
         # Approximate MDP
         P_samp, R_samp = self.sample_mdp()
 
+        #Augmentation
+        P_samp_augm, R_samp_augm = self.augment_MDP(P_samp, R_samp)
+
         # Compute optimistic policy
         epsilon = self.delta # desired accuracy
         if (self.C == None):
-            span_value = self.value_iteration(P_samp, R_samp, epsilon)
+            span_value = self.value_iteration(P_samp_augm, R_samp_augm, epsilon)
         else:
-            span_value = self.value_iteration_modified(P_samp, R_samp, epsilon, self.C)
+            span_value = self.value_iteration_modified(P_samp_augm, R_samp_augm, epsilon, self.C)
+
+        # Desaugment
+        self.policy = self.transform_policy(self.policy)
 
         if (self.verbose > 1):
             print(" took", time.time() - time0, "s.")
         if (self.verbose > 0):
             print(" -> New policy:", self.policy)
+
+    def augment_MDP(self, P, R):
+        """ Transform MDP into augmented MDP """
+        n_actions_augm = self.n_actions*2
+        R_augm = {}
+        P_augm = {}
+        # Copy of MDP
+        for s in range(self.n_states):
+            for a in range(self.n_actions):
+                R_augm[s, a] = R[s, a]
+                P_augm[s, a] = P[s, a]
+                R_augm[s, a+self.n_actions] = 0
+                P_augm[s, a+self.n_actions] = P[s, a]
+        self.n_actions = self.n_actions*2
+        return P_augm, R_augm
+
+    def transform_policy(self, policy_augm):
+        """ Transform a policy from the augmented MDP to a policy of MDP """
+        self.n_actions = int(self.n_actions/2)
+        policy = np.zeros((self.n_states, self.n_actions))
+        for s in range(self.n_states):
+            for s in range(self.n_states):
+                for a in range(self.n_actions):
+                    policy[s][a] = policy_augm[s][a] + policy_augm[s][self.n_actions+a]
+        return policy
 
 #-----------------------------------------------------------------------------
 # UCRL2
@@ -430,7 +443,8 @@ class UCRL2(Agent):
                     v = r_optimal + np.dot(vec, u1)
                     if first_action or v + u1[s] > u2[s]:  # optimal policy = argmax
                         u2[s] = v + u1[s]
-                        self.policy[s] = a
+                        self.policy[s, :] = np.zeros(n_actions)
+                        self.policy[s, a] = 1
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
                 return max(u1) - min(u1), u1, u2

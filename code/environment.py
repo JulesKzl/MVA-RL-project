@@ -1,60 +1,11 @@
 # coding: utf-8
 """
-Implementation of a basic RL environments.
-
-author: iosband@stanford.edu
-Edit : Jules Kozolinsky
+MDP Implementation
 """
 
 import numpy as np
-import numbers #Gridwold
-import copy #Gridwold
 
-#-------------------------------------------------------------------------------
-class Environment(object):
-    """General RL environment"""
-
-    def __init__(self, n_states, n_actions):
-        """
-        Initialize Env
-
-        Args:
-            n_states  - int - number of states
-            n_actions - int - number of actions
-
-        Returns:
-            Environment object
-        """
-        self.n_states = n_states
-        self.n_actions = n_actions
-
-    def reset(self):
-        """
-        Returns:
-            An initial state randomly drawn from
-            the initial distribution
-        """
-        pass
-
-    def step(self, state, action):
-        """
-        Moves one step in the environment.
-
-        Args:
-            state (int): the amount of good
-            action (int): the action to be executed
-
-        Returns:
-            next_state (int): the state reached by performing the action
-            reward (float): a scalar value representing the immediate reward
-            absorb (boolean): True if the next_state is absorsing, False otherwise
-        """
-        pass
-
-
-
-#-------------------------------------------------------------------------------
-class MDP(Environment):
+class MDP:
     """
     MDP
     Rewards are all normal.
@@ -75,7 +26,8 @@ class MDP(Environment):
         Returns:
             Environment object
         """
-        super(MDP, self).__init__(n_states, n_actions)
+        self.n_states = n_states
+        self.n_actions = n_actions
 
         self.timestep = 0
 
@@ -183,33 +135,6 @@ class MDP(Environment):
             regret = T_max*LTAR_opt - np.array(cumul_reward)
         return cumul_reward, regret
 
-    def augment_MDP(self):
-        """ Transform MDP into augmented MDP """
-        n_actions_augm = self.n_actions*2
-        R_augm = {}
-        P_augm = {}
-        # Copy of MDP
-        for s in range(self.n_states):
-            for a in range(self.n_actions):
-                R_augm[s, a] = self.R[s, a]
-                P_augm[s, a] = self.P[s, a]
-                R_augm[s, a+self.n_actions] = (0, 0)
-                P_augm[s, a+self.n_actions] = self.P[s, a]
-
-        self.MDP_augm = MDP(self.n_states, n_actions_augm)
-        self.MDP_augm.R = R_augm
-        self.MDP_augm.P = P_augm
-        self.augmented = True
-
-    def transform_policy(self, policy_augm):
-        """ Transform a policy from the augmented MDP to a policy of MDP """
-        policy = policy_augm.copy()
-        for s in range(self.n_states):
-            if (policy_augm[s] >= self.n_actions):
-                policy[s] = policy_augm[s]-self.n_actions
-        return policy
-    
-
     def compute_gain(self, epsilon):
         """
         :param epsilon: desired accuracy
@@ -217,9 +142,9 @@ class MDP(Environment):
         u1 = np.zeros(self.n_states)
         u2 = np.zeros(self.n_states)
         policy_opt = np.zeros(self.n_states)
-        
+
         P_samp = self.P
-        R_samp = self.R 
+        R_samp = self.R
         counter = 0
         while True:
             counter += 1
@@ -233,9 +158,9 @@ class MDP(Environment):
                         u2[s] = v
                         policy_opt[s] = a
                     first_action = False
-            
+
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 100):  # stopping condition of EVI
-                
+
                 max_gain = 0.5 * (max(u2 - u1) + min(u2 - u1))
                 self.max_gain = max_gain
                 self.pi_star = policy_opt
@@ -244,4 +169,3 @@ class MDP(Environment):
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
-
