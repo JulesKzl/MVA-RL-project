@@ -7,24 +7,18 @@ import experiment as exp
 
 # env_TP1 = env.make_MDP_TP1()
 # env_TP1 = env.make_riverSwim()
-env_TP1 = env.make_MDP_Pierre()
+# env_TP1 = env.make_MDP_Pierre()
+env_TP1 = env.generate_random_MDP(10, 5, 10)
 
-max_reward = 5
-agent = ag.PSRL(env_TP1, max_reward, verbose=0, C=5)
+# env_TP1.augment_MDP()
+
+max_reward = 10
+agent = ag.PSRL(env_TP1, max_reward, verbose=0)
 # agent = ag.UCRL2(env_TP1, max_reward, verbose=3)
 
-N = 99
-# N = 100
-print(env_TP1.pi_star)
+policy_opt = agent.compute_optimal_policy(env_TP1, 1e-4)
+print(policy_opt)
+
+N = 100
 exp.run_experiment(agent, env_TP1, N, 100)
 print(agent.policy)
-
-# R1 = env_TP1.R
-# R = {key: R1[key][0] for key in R1.keys()}
-# print(R)
-# P = env_TP1.P
-#
-# _, _, v = agent.value_iteration(P,R, 1e-4)
-# policy_op = agent.policy
-# print(v)
-# print(policy_op)
