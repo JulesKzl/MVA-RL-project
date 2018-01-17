@@ -44,6 +44,8 @@ class MDP:
                 self.P[state, action] = np.ones(n_states) / n_states
         self.augmented = False
 
+        self.x_0 = None
+
     def get_R(self):
         if (self.augmented):
             return self.R_augm
@@ -77,7 +79,10 @@ class MDP:
             the initial distribution
         """
         self.timestep = 0
-        x_0 = np.random.randint(0, self.n_states)
+        if (self.x_0 != None):
+            x_0 = self.x_0
+        else:
+            x_0 = np.random.randint(0, self.n_states)
         return x_0
 
     def step(self, state, action):

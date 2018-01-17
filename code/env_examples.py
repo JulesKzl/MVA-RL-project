@@ -116,7 +116,7 @@ def make_riverSwim(n_states=6):
             P_true[s, a] = np.zeros(n_states)
 
     # Rewards
-    R_true[0, 0] = (5. / 1000, 0)
+    R_true[0, 0] = (0.2, 0)
     R_true[n_states - 1, 1] = (1, 0)
 
     # Transitions
@@ -137,7 +137,7 @@ def make_riverSwim(n_states=6):
     riverSwim = MDP(n_states, n_actions)
     riverSwim.R = R_true
     riverSwim.P = P_true
-
+    riverSwim.x_0 = 0
     return riverSwim
 
 def make_StarRiverSwim(n_branch=3, n_states=6):

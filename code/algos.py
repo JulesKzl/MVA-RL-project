@@ -252,11 +252,11 @@ class PSRL(Agent):
                             r_optimal = R_samp[s, a]
                             v = r_optimal + np.dot(vec, u2)
 
-                            if v_m < v < min_u2 +C:
+                            if (v_m < v and v < min_u2 +C):
                                 v_m = v
                                 a_m = a
 
-                            elif v_p > v > min_u2 +C:
+                            elif (v_p > v and v > min_u2 +C):
                                 span_break = True
                                 v_p = v
                                 a_p = a
@@ -268,7 +268,6 @@ class PSRL(Agent):
                             q = (v_p -(min_u2 +C))/(v_p - v_m)
                             self.policy[s][a_m] = q
                             self.policy[s][a_p] = 1-q
-
                     # return
                     return max(u2) - min(u2), u1, u2
 
@@ -336,7 +335,7 @@ class PSRL(Agent):
                 P_augm[s, a] = P[s, a]
                 R_augm[s, a+self.n_actions] = 0
                 P_augm[s, a+self.n_actions] = P[s, a]
-        self.n_actions = self.n_actions*2
+        self.n_actions = n_actions_augm
         return P_augm, R_augm
 
     def transform_policy(self, policy_augm):
