@@ -49,11 +49,11 @@ class Agent:
         self.delta = 1
 
         # mu0 - prior mean rewards
-        self.mu0 = self.r_max + 99.
+        self.mu0 = self.r_max
         # tau0 - precision of prior mean rewards
         self.tau0 = 1.
         # alpha0 - prior weight for uniform Dirichlet
-        self.alpha0 = 1.
+        self.alpha0 = 0.1
 
         # Now make the prior beliefs
         self.R_prior = {}

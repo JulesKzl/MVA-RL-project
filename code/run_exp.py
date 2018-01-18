@@ -10,10 +10,10 @@ from tqdm import tqdm
 
 # env_TP1 = env.make_MDP_TP1()
 # env_TP1 = env.make_MDP_Pierre()
-# env_TP1 = env.generate_random_MDP(20, 2, 1)
+env_TP1 = env.generate_random_MDP(10, 2, 1)
 
 # env_TP1 = env.make_StarRiverSwim(5, 6)
-env_TP1 = env.make_riverSwim(5)
+# env_TP1 = env.make_riverSwim(5)
 env_TP1.compute_gain(1e-5)
 print("Bias:", env_TP1.bias)
 
