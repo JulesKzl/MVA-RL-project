@@ -13,12 +13,12 @@ from math import *
 # env_TP1 = env.make_MDP_Pierre()
 #env_TP1 = env.generate_random_MDP(20, 2, 1)
 n= 15
-R0 = 0.74
-R1 = 0.745
+R0 = 0.5
+R1 = 0.75
 R = 0.75
 delta = 0.05
-#env_TP1 = env.make_trap(n, R0, R, R1, delta, x0 = n-1)
-env_TP1 = env.make
+env_TP1 = env.make_trap(n, R0, R, R1, delta, x0 = 7)
+#env_TP1 = env.make
 #env_TP1 = env.make_StarRiverSwim(5, 6)
 env_TP1.compute_gain(1e-5)
 #print("Bias:", env_TP1.bias)
@@ -26,8 +26,8 @@ env_TP1.compute_gain(1e-5)
 
 max_reward = 1
 
-nb_simu = 80
-T_max = 30000
+nb_simu = 50
+T_max = 20000
 span_bias = env_TP1.span_bias
 print("span_bias :", span_bias)
 H,S,A = env_TP1.bias, env_TP1.n_states, env_TP1.n_actions
@@ -35,7 +35,7 @@ H,S,A = env_TP1.bias, env_TP1.n_states, env_TP1.n_actions
 opt_check = env_TP1.check_optimality()
 print("gain", env_TP1.max_gain)
 
-for C in tqdm([span_bias+5, float("inf")]):
+for C in tqdm([0.01,0.5,1, float("inf")]):
     regret_list = np.empty((nb_simu, T_max))
     for i in range(nb_simu):
         agent = ag.PSRL(env_TP1, max_reward, verbose=0, C=C)

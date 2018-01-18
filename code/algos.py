@@ -115,7 +115,7 @@ class Agent:
         :param env: given RL environment
         :param max_duration: maximum execution time
         """
-        print(self.policy[0], self.policy[self.n_states-1])
+        #print(self.policy[0], self.policy[self.n_states-1])
         if (self.verbose > 0):
             print("> Execute policy.")
         time0 = time.time()
@@ -183,7 +183,8 @@ class Agent:
                 u1 = u2
                 u2 = np.empty(self.n_states)
 
-    def run(self, env, T_max):
+    def run(self, env, T_max, seed=1):
+        #np.random.seed(seed)
         while(self.t < T_max):
             self.update_policy()
             self.execute_policy(env, T_max)
