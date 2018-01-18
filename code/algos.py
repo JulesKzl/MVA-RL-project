@@ -115,6 +115,7 @@ class Agent:
         :param env: given RL environment
         :param max_duration: maximum execution time
         """
+        print(self.policy[0], self.policy[self.n_states-1])
         if (self.verbose > 0):
             print("> Execute policy.")
         time0 = time.time()
@@ -217,8 +218,8 @@ class PSRL(Agent):
             :param epsilon: desired accuracy
             """
             self.policy = np.zeros((self.n_states, self.n_actions))
-            u1 = np.zeros(self.n_states)
-            u2 = np.zeros(self.n_states)
+            u1 = np.empty(self.n_states)
+            u2 = np.empty(self.n_states)
             min_u2 = float("inf")
             counter = 0
             while True:
@@ -252,15 +253,15 @@ class PSRL(Agent):
                             r_optimal = R_samp[s, a]
                             v = r_optimal + np.dot(vec, u2)
 
-                            if (v_m < v and v < min_u2 +C):
+                            if v_m < v < min_u2 +C:
                                 v_m = v
                                 a_m = a
 
-                            elif (v_p > v and v > min_u2 +C):
+                            elif v_p > v > min_u2 +C:
                                 span_break = True
                                 v_p = v
                                 a_p = a
-
+                                
                         self.policy[s, :] = np.zeros(self.n_actions)
                         if not span_break:
                             self.policy[s][a_m] = 1 #truncation/interpolation not needed.
@@ -268,6 +269,7 @@ class PSRL(Agent):
                             q = (v_p -(min_u2 +C))/(v_p - v_m)
                             self.policy[s][a_m] = q
                             self.policy[s][a_p] = 1-q
+
                     # return
                     return max(u2) - min(u2), u1, u2
 
@@ -312,8 +314,12 @@ class PSRL(Agent):
         epsilon = self.delta # desired accuracy
         if (self.C == None):
             span_value = self.value_iteration(P_samp_augm, R_samp_augm, epsilon)
+            #span_value = self.value_iteration(P_samp, R_samp, epsilon)
+
         else:
             span_value = self.value_iteration_modified(P_samp_augm, R_samp_augm, epsilon, self.C)
+            #span_value = self.value_iteration_modified(P_samp, R_samp, epsilon, self.C)
+
 
         # Desaugment
         self.policy = self.transform_policy(self.policy)
@@ -335,7 +341,7 @@ class PSRL(Agent):
                 P_augm[s, a] = P[s, a]
                 R_augm[s, a+self.n_actions] = 0
                 P_augm[s, a+self.n_actions] = P[s, a]
-        self.n_actions = n_actions_augm
+        self.n_actions = self.n_actions*2
         return P_augm, R_augm
 
     def transform_policy(self, policy_augm):

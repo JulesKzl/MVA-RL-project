@@ -15,7 +15,7 @@ class MDP:
     P - dict by (s,a) - each P[s,a] = transition vector size S
     """
 
-    def __init__(self, n_states, n_actions):
+    def __init__(self, n_states, n_actions, x0 = None):
         """
         Initialize MDP
 
@@ -34,8 +34,11 @@ class MDP:
         # Now initialize R and P
         self.R = {}
         self.P = {}
+        self.x0 = None #initial state
+
         self.max_gain = None
         self.bias = None
+        self.span_bias = None
         self.pi_star = np.empty(self.n_states)
 
         for state in range(n_states):
@@ -43,8 +46,6 @@ class MDP:
                 self.R[state, action] = (1, 1)
                 self.P[state, action] = np.ones(n_states) / n_states
         self.augmented = False
-
-        self.x_0 = None
 
     def get_R(self):
         if (self.augmented):
@@ -79,11 +80,11 @@ class MDP:
             the initial distribution
         """
         self.timestep = 0
-        if (self.x_0 != None):
-            x_0 = self.x_0
+        if self.x0 is not None:
+            return self.x0
         else:
             x_0 = np.random.randint(0, self.n_states)
-        return x_0
+            return x_0
 
     def step(self, state, action):
         """
@@ -169,8 +170,17 @@ class MDP:
                 max_gain = 0.5 * (max(u2 - u1) + min(u2 - u1))
                 self.max_gain = max_gain
                 self.pi_star = policy_opt
-                self.bias = max(u2) - min(u2)
+                self.bias = u2
+                self.span_bias = max(u2) - min(u2)
                 break
             else:
                 u1 = u2
                 u2 = np.empty(self.n_states)
+
+    def check_optimality(self):
+        opt_check=[]
+        for s in range(self.n_states):
+            qt = np.array([self.R[s,a][0] + np.dot(self.P[s,a], self.bias) - self.bias[s] for a in range(self.n_actions)])
+
+            opt_check.append(max(qt))     
+        return opt_check         
