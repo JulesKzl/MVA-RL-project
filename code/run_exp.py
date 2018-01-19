@@ -23,7 +23,7 @@ env_TP1.compute_gain(1e-5)
 max_reward = 1
 
 nb_simu = 80
-T_max = 500
+T_max = 30000
 
 span_bias = env_TP1.span_bias
 print("span_bias :", span_bias)
