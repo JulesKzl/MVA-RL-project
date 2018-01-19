@@ -62,36 +62,34 @@ def make_MDP_Pierre():
             P_true[s, a] = np.zeros(n_states)
 
     P_true[0,0][1] = 1
-    R_true[0,0] = (1, 0)
+    R_true[0,0] = (0, 0)
     P_true[0,1][0] = 0.8
     P_true[0,1][1] = 0.2
-    R_true[0,1] = (5, 0)
+    R_true[0,1] = (0.04, 0)
 
     P_true[1,0][0] = 0.4
     P_true[1,0][2] = 0.6
-    R_true[1,0] = (1, 0)
+    R_true[1,0] = (0, 0)
     P_true[1,1][0] = 0.7
     P_true[1,1][2] = 0.3
-    R_true[1,1] = (1, 0)
+    R_true[1,1] = (0, 0)
 
     P_true[2,0][3] = 0.4
     P_true[2,0][1] = 0.6
-    R_true[2,0] = (1, 0)
+    R_true[2,0] = (0, 0)
     P_true[2,1][3] = 0.7
     P_true[2,1][1] = 0.3
-    R_true[2,1] = (1, 0)
+    R_true[2,1] = (0, 0)
 
     P_true[3,0][2] = 1
-    R_true[3,0] = (1, 0)
+    R_true[3,0] = (0, 0)
     P_true[3,1][2] = 0.2
     P_true[3,1][3] = 0.8
-    R_true[3,1] = (10, 0)
+    R_true[3,1] = (1, 0)
 
     MDP_Pierre = MDP(n_states, n_actions)
     MDP_Pierre.R = R_true
     MDP_Pierre.P = P_true
-
-    # MDP_Pierre.pi_star = [1, 0, 1]
 
     return MDP_Pierre
 
@@ -266,17 +264,17 @@ def make_trap(n, R0, R, R1, delta, x0=None):
     for s_inside in range(1, n_states-1): #inside nodes
         R_true[s_inside, 0] = (R, 0)
         R_true[s_inside, 1] = (R, 0)
-        
+
         P_true[s_inside, 0][s_inside-1] = 1-delta
-        P_true[s_inside, 0][s_inside] = delta  
-        
+        P_true[s_inside, 0][s_inside] = delta
+
         P_true[s_inside, 1][s_inside+1] = 1-delta
         P_true[s_inside, 1][s_inside] = delta
-    
+
     # For first and last nodes
     R_true[0, 0] = (R0, 0)
     R_true[0, 1] = (R, 0)
-    
+
     P_true[0,0][0] = 1
     P_true[0,1][0] = delta
     P_true[0,1][1] = 1-delta

@@ -71,7 +71,7 @@ class MDP:
         else:
             self.P = P
 
-    def reset(self):
+    def reset(self, seed=None):
         """
         Reset the environment
 
@@ -79,6 +79,8 @@ class MDP:
             An initial state randomly drawn from
             the initial distribution
         """
+        if (seed != None):
+            np.random.seed(seed)
         self.timestep = 0
         if self.x0 is not None:
             return self.x0
@@ -86,7 +88,7 @@ class MDP:
             x_0 = np.random.randint(0, self.n_states)
             return x_0
 
-    def step(self, state, action):
+    def step(self, state, action, seed=None):
         """
         Moves one step in the environment.
 
@@ -99,6 +101,8 @@ class MDP:
             reward (float): a scalar value representing the immediate reward
             absorb (boolean): True if the next_state is absorsing, False otherwise
         """
+        if (seed != None):
+            np.random.seed(seed)
         R = self.get_R()
         if R[state, action][1] < 1e-9:
             reward = R[state, action][0]
@@ -114,7 +118,7 @@ class MDP:
 
         return next_state, reward, absorb
 
-    def compute_cumul_reward(self, T_max, policy, init_state=None):
+    def compute_cumul_reward(self, policy, T_max , init_state=None):
         """ Compute long-term average reward """
         t = 0
         cumul_reward = []
@@ -122,24 +126,14 @@ class MDP:
             state = self.reset()
         else:
             state = init_state
-        action = policy[state]
+        action = np.random.choice(self.n_actions, p=policy[state,:])
         while (t < T_max): #or terminal
             t += 1
             nexts, reward, term = self.step(state, action)
             cumul_reward.append(reward)
             state = nexts
-            action = policy[state]
-        LTAR = np.sum(cumul_reward)/T_max
-        return cumul_reward, LTAR
-
-    def compute_regret(self, T_max, policy, policy_opt, init_state=None):
-        cumul_reward, _ = self.compute_cumul_reward(T_max, policy, init_state)
-        if (policy_opt == []):
-            regret = None
-        else:
-            _, LTAR_opt = self.compute_cumul_reward(T_max, policy_opt, init_state)
-            regret = T_max*LTAR_opt - np.array(cumul_reward)
-        return cumul_reward, regret
+            action = np.random.choice(self.n_actions, p=policy[state,:])
+        return cumul_reward
 
     def compute_gain(self, epsilon):
         """
@@ -177,10 +171,78 @@ class MDP:
                 u1 = u2
                 u2 = np.empty(self.n_states)
 
+    def compute_gain_constraints(self, epsilon, C=float("inf")):
+        """
+        :param epsilon: desired accuracy
+        """
+        u1 = np.empty(self.n_states)
+        u2 = np.empty(self.n_states)
+        policy_opt = np.zeros((self.n_states, self.n_actions))
+
+        P_samp = self.P
+        R_samp = self.R
+        min_u2 = float("inf")
+        counter = 0
+        while True:
+            counter += 1
+            for s in range(0, self.n_states):
+                first_action = True
+                for a in range(self.n_actions):
+                    vec = P_samp[s, a]
+                    r_optimal = R_samp[s, a][0]
+                    v = r_optimal + np.dot(vec, u1)
+                    if first_action or v > u2[s]:
+                        u2[s] = v
+                        first_action = False
+
+                if u2[s] < min_u2:
+                    min_u2 = u2[s]
+
+            u2 = np.clip(u2, None, min_u2 + C)
+            if (max(u2-u1)-min(u2-u1) < epsilon):# or counter > 10):  # stopping condition of EVI
+                #update policy
+                for s in range(self.n_states):
+                    span_break = False
+                    a_p = -1
+                    a_m = -1
+                    v_p = float("inf")
+                    v_m = -float("inf")
+                    for a in range(self.n_actions):
+                        vec = P_samp[s, a]
+                        r_optimal = R_samp[s, a][0]
+                        v = r_optimal + np.dot(vec, u2)
+
+                        if v_m < v < min_u2 +C:
+                            v_m = v
+                            a_m = a
+
+                        elif v_p > v > min_u2 +C:
+                            span_break = True
+                            v_p = v
+                            a_p = a
+
+                    policy_opt[s, :] = np.zeros(self.n_actions)
+                    if not span_break:
+                        policy_opt[s, :] = np.zeros(self.n_actions)
+                        policy_opt[s][a_m] = 1 #truncation/interpolation not needed.
+                    else:
+                        q = (v_p -(min_u2 +C))/(v_p - v_m)
+                        policy_opt[s][a_m] = q
+                        policy_opt[s][a_p] = 1-q
+                # return
+                return policy_opt, max(u2) - min(u2)
+
+            else:
+                u1 = u2
+                u2 = np.empty(self.n_states)
+                min_u2 = float("inf")
+
+
+
     def check_optimality(self):
         opt_check=[]
         for s in range(self.n_states):
             qt = np.array([self.R[s,a][0] + np.dot(self.P[s,a], self.bias) - self.bias[s] for a in range(self.n_actions)])
 
-            opt_check.append(max(qt))     
-        return opt_check         
+            opt_check.append(max(qt))
+        return opt_check

@@ -30,7 +30,7 @@ class Agent:
     Learning Agent (Childs: UCRL2 and PSRL)
     """
 
-    def __init__(self, env, r_max, verbose=0):
+    def __init__(self, env, r_max, verbose=0, seed=None):
         """
         Initialize our learning agent
 
@@ -72,6 +72,7 @@ class Agent:
         self.policy = np.zeros((n_states, n_actions))
         self.policy_opt = []
         self.verbose = verbose
+        self.seed = seed
 
     def pick_action(self, state):
         """
@@ -81,6 +82,9 @@ class Agent:
         action
         :return: action from policy
         """
+        if (self.seed != None):
+            seed = self.seed + 100*self.t
+            np.random.seed(seed)
         action = np.random.choice(self.n_actions, p=self.policy[state,:])
         return action
 
@@ -121,14 +125,18 @@ class Agent:
         time0 = time.time()
 
         # Initialize env
-        state = env.reset()
+        seed = self.seed
+        if (seed != None):
+            seed += 100*self.t
+        state = env.reset(seed)
         action = self.pick_action(state)
 
         while (self.nu_k[state][action] < max(1, self.nb_observations[state][action]) and self.t<T_max):
             self.t += 1 # Avoid infinite loop
-
+            if (seed != None):
+                seed = self.seed + 100*self.t
             # Step through the episode
-            new_state, reward, absorb = env.step(state, action)
+            new_state, reward, absorb = env.step(state, action, seed)
             self.reward_list.append(reward)
             # Update estimations at each step
             self.update_models(state, action, new_state, reward, absorb)
@@ -183,8 +191,9 @@ class Agent:
                 u1 = u2
                 u2 = np.empty(self.n_states)
 
-    def run(self, env, T_max, seed=1):
-        #np.random.seed(seed)
+    def run(self, env, T_max):
+        if (self.seed != None):
+            np.random.seed(self.seed)
         while(self.t < T_max):
             self.update_policy()
             self.execute_policy(env, T_max)
@@ -204,8 +213,8 @@ class PSRL(Agent):
     """
     Posterior Sampling for Reinforcement Learning
     """
-    def __init__(self, env, r_max, verbose=0, C=None):
-        super(PSRL, self).__init__(env, r_max, verbose)
+    def __init__(self, env, r_max, verbose=0, C=None, seed=None):
+        super(PSRL, self).__init__(env, r_max, verbose, seed=seed)
         self.name = "PSRL"
         self.C = C
 
@@ -239,9 +248,7 @@ class PSRL(Agent):
                         min_u2 = u2[s]
 
                 u2 = np.clip(u2, None, min_u2 + C)
-
                 if (max(u2-u1)-min(u2-u1) < epsilon):# or counter > 10):  # stopping condition of EVI
-
                     #update policy
                     for s in range(self.n_states):
                         span_break = False
@@ -262,15 +269,15 @@ class PSRL(Agent):
                                 span_break = True
                                 v_p = v
                                 a_p = a
-                                
+
                         self.policy[s, :] = np.zeros(self.n_actions)
                         if not span_break:
+                            self.policy[s, :] = np.zeros(self.n_actions)
                             self.policy[s][a_m] = 1 #truncation/interpolation not needed.
                         else:
                             q = (v_p -(min_u2 +C))/(v_p - v_m)
                             self.policy[s][a_m] = q
                             self.policy[s][a_p] = 1-q
-
                     # return
                     return max(u2) - min(u2), u1, u2
 
@@ -287,6 +294,9 @@ class PSRL(Agent):
             R_samp - R_samp[s, a] is the sampled mean reward for (s,a)
             P_samp - P_samp[s, a] is the sampled transition vector for (s,a)
         """
+        if (self.seed != None):
+            seed = self.seed + 100*self.t
+            np.random.seed(seed)
         R_samp = {}
         P_samp = {}
         for s in range(self.n_states):
@@ -294,7 +304,6 @@ class PSRL(Agent):
                 mu, tau = self.R_prior[s, a]
                 R_samp[s, a] = mu + np.random.normal() * 1./np.sqrt(tau)
                 P_samp[s, a] = np.random.dirichlet(self.P_prior[s, a])
-
         return P_samp, R_samp
 
     def update_policy(self):
@@ -316,11 +325,9 @@ class PSRL(Agent):
         if (self.C == None):
             span_value = self.value_iteration(P_samp_augm, R_samp_augm, epsilon)
             #span_value = self.value_iteration(P_samp, R_samp, epsilon)
-
         else:
             span_value = self.value_iteration_modified(P_samp_augm, R_samp_augm, epsilon, self.C)
             #span_value = self.value_iteration_modified(P_samp, R_samp, epsilon, self.C)
-
 
         # Desaugment
         self.policy = self.transform_policy(self.policy)
@@ -449,7 +456,7 @@ class UCRL2(Agent):
                     v = r_optimal + np.dot(vec, u1)
                     if first_action or v + u1[s] > u2[s]:  # optimal policy = argmax
                         u2[s] = v + u1[s]
-                        self.policy[s, :] = np.zeros(n_actions)
+                        self.policy[s, :] = np.zeros(self.n_actions)
                         self.policy[s, a] = 1
                     first_action = False
             if (max(u2-u1)-min(u2-u1) < epsilon or counter > 10):  # stopping condition of EVI
